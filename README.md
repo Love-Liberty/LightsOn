@@ -11,3 +11,6 @@ The hardware & software have been installed and working in model buildings since
 The next step is to add a control panel & LCD display such that the variables within the software can be altered without having to upload new software.
 This update began Nov 11 2022
 
+The layout and a simulation can be seen at Tinkercad https://www.tinkercad.com/things/aeadTduApG7-introduction. (If you look, you have to slide the switch to the ON position.
+
+In the existing Oct 2022 software the slide switch has been replaced with a photoresistor input that turns the lights on or off depending on the room lighting.
