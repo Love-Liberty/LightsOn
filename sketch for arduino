@@ -1,0 +1,156 @@
+#include <Adafruit_NeoPixel.h>
+
+// Which pin on the Arduino is connected to the NeoPixels?
+// On a Trinket or Gemma we suggest changing this to 1:
+#define LED_PIN    3
+  
+// How many NeoPixels are attached to the Arduino?
+#define LED_COUNT 8
+  
+  
+  // Declare our NeoPixel strip object:
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+// Argument 1 = Number of pixels in NeoPixel strip
+// Argument 2 = Arduino pin number (most are valid)
+// Argument 3 = Pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+
+int pixelNumber=0;
+int colorArray[] = {250, 250, 250};
+bool night=false; //from night/day switch
+bool lightsOn=false;
+int x=0;
+
+int pixelColors[LED_COUNT][3] = {
+//Setting the colors to be used in each pixel
+  {0,  0,  255},
+  {0,  255,  0},
+  {240,  0, 0},
+  {35,  250, 0},
+  {6,  250, 250},
+  {26,  100, 0},
+  {56,  0, 100},
+  {254,  50, 50}
+     };
+
+void setup() {
+  digitalWrite(11,HIGH);//stanby indicator on
+
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+  pinMode(2,INPUT);
+  pinMode(11,OUTPUT);//standby power 
+  pinMode(12,OUTPUT);//signal
+  pinMode(13,OUTPUT);//Night or day indicator
+   Serial.begin(9600); // open the serial port at 9600 bps:
+}
+
+void loop()
+{
+
+  
+night = digitalRead(2);
+  if (night) {
+    digitalWrite(13,HIGH);
+    nightfall();//always do something at night for variation
+   }  else {if (lightsOn){//do nothing if lights already off
+          digitalWrite(13,LOW);dayBreak();}
+          }
+    
+  
+  //RGBW use strip.setPixelColor(n, red, green, blue, white);
+  
+//  strip.show();
+  
+  // set multiple pixels with strip.fill(color, first, count);
+  
+  //turn all off strip.clear();
+  
+  delay(50);
+/*
+  for (pixelNumber=3;pixelNumber=5;pixelNumber+=1);
+ {strip.setPixelColor(pixelNumber, colorArray[0],colorArray[1], colorArray[2]);
+ }
+*/
+  //nightfall();
+  
+  
+}
+
+void setPixel()
+{   // strip.setPixelColor(pixelNumber, colorArray[0],colorArray[1], colorArray[2]);
+}
+
+void nightfall()
+{//RGB strips set color from pixel 0, value 0 to 255
+  //for each red, green, blue
+int pNumber;
+for (pNumber = 0;pNumber<LED_COUNT; pNumber++)
+  {  
+ Serial.print(pNumber);
+  Serial.print(" ");  Serial.print(pixelColors[pNumber][0]);
+    Serial.print(" ");
+  Serial.print(pixelColors[pNumber][1]);
+  Serial.print(" ");
+  Serial.println(pixelColors[pNumber][2]);
+   digitalWrite(12,HIGH);//signal feedback
+
+//   strip.setPixelColor(pNumber, colorArray[0],colorArray[1], colorArray[2]);
+  if(random(100)>25){
+  strip.setPixelColor(pNumber, pixelColors[pNumber][0],pixelColors[pNumber][1],pixelColors[pNumber][2]);
+
+  }
+     //delay(1000);
+  strip.show();
+  digitalWrite(12,LOW);
+delay(200 * random(5));
+
+
+}
+  lightsOn=true;
+offOn();
+  flicker();
+  
+}
+
+void dayBreak()
+  {    
+int pNumber;
+for (pNumber = 0;pNumber<LED_COUNT; pNumber++)
+{
+  strip.setPixelColor(pNumber,0,0,0);
+  digitalWrite(12,HIGH);//signal feedback
+  strip.show();
+  digitalWrite(12,LOW);
+  delay(200 * random(5));  
+  }
+  lightsOn=false;
+}
+
+void offOn(){// thinking about turning light off then on 
+  int randomPixel=random(LED_COUNT-1);
+int randomTime=random(500, 5000);
+  Serial.print("Random pixel= ");
+  Serial.println(randomPixel);
+Serial.print("Random Time= ");
+  Serial.println(randomTime);
+  strip.setPixelColor(randomPixel,0,0,0); 
+ digitalWrite(12,HIGH);//signal feedback
+ strip.show();
+ digitalWrite(12,LOW);//signal feedback
+  delay(randomTime);
+}
+
+void flicker()
+{int randomPixel=random(LED_COUNT-1);
+  strip.setPixelColor(randomPixel, pixelColors[randomPixel][0]+10,pixelColors[randomPixel] [1]+10,pixelColors[randomPixel][2]+10);
+  digitalWrite(12,HIGH);//signal feedback
+ strip.show();
+  digitalWrite(12,LOW);//signal feedback
+ delay(10);
+
+}
