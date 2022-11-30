@@ -3,7 +3,10 @@
 // Displaying menus, and moving from one menu item to the next by a single button push
 //The code searches the char array looking for the next menu item, finds it and places the cursor under the first letter
 //This skips menu items of any length and empty spaces.
-//1 press of "left" or "right" button skips to the next menu item
+//Direction is controlled through A0 (for test using pot) "left" or "right" button skips to the next menu item
+//As a test if it finds the "Color" label the menu is changed from the Main menu to the Color menu
+
+
 #include <LiquidCrystal.h>
 #define labelLED 2
 #define spaceLED 3
