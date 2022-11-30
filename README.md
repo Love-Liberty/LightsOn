@@ -15,4 +15,4 @@ The layout and a simulation can be seen at Tinkercad https://www.tinkercad.com/t
 
 In the existing Oct 2022 software the slide switch has been replaced with a photoresistor input that turns the lights on or off depending on the room lighting.
 
-The LCD display & menu can be seen in early stage https://wokwi.com/projects/349613619705545298
+The LCD display & menu can be seen in early stage https://wokwi.com/projects/349613619705545298 Nov 29 2022
