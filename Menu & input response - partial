@@ -4,6 +4,7 @@
 //The code searches the char array looking for the next menu item, finds it and places the cursor under the first letter
 //This skips menu items of any length and empty spaces.
 //1 press of "left" or "right" button skips to the next menu item
+// if selected then display new menu
  
 #include <LiquidCrystal.h>
 #define labelLED 2
