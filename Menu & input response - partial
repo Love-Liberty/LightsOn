@@ -1,187 +1,229 @@
 // LCD1602 to Arduino with function parameters and char arrays.
-//Nov 30 19:53
+////Nov 30 22:57
 // Displaying menus, and moving from one menu item to the next by a single button push
 //The code searches the char array looking for the next menu item, finds it and places the cursor under the first letter
 //This skips menu items of any length and empty spaces.
 //1 press of "left" or "right" button skips to the next menu item
-// if selected then display new menu
- 
 #include <LiquidCrystal.h>
 #define labelLED 2
 #define spaceLED 3
 #define textLED 4
- 
 enum stateOfbutton_t {unknown, select, left, up, down, RIGHT};
 //enum stateOfMenuLabels_t {}; //?? too many?
- 
 LiquidCrystal lcd(12, 11, 10, 9, 8, 7);// This is set on a simulator. May not match the actual hardware
- 
 stateOfbutton_t buttonState=unknown;// buttonState is used in other parts of the software
- 
 int8_t cursorCol;  //0.6.12 are the columns where the main menu items begin on row 0
 bool cursorRow;  //row 0   0,5,13 row 1 menu item locations
- 
 char menu1Main [] {"Main Flicker Day Color OnOff EXIT"};//has an extra space between day & color to separate them, but that 1 space is not shown on LCD
-                 // 0123456789ABCDEF0123456789ABCDEF0 =33 elements
-char menu12Color[] {"Color: label1    label2 lab3 EXIT"}; // this is a 2nd level menu not currently used in this code
-
+                //  0123456789ABCDEF0123456789ABCDEF0 =33 elements
+char menu2Color[] {"Color: label1    label2 lab3 EXIT"}; // this is a 2nd level menu not currently used in this code
+bool row=1;  //test only
+int startColumn=12 ;//TEST ONLY. Could start with 12,1 as the place where Exit is on lcd
+int labelPosition;
 char thisLabel[10];
 
-bool row=0;  //test only
-int startColumn=13 ;//TEST ONLY. Could start with 12,1 as the place where Exit is on lcd
-int labelPosition;
 
+
+ 
 void displayCursor(int col, bool row){
 lcd.setCursor(col,row);
- delay(200); // the delay is just here so the movement of the cursor can be seen for testing
+delay(500); // the delay is just here so the movement of the cursor can be seen for testing
 }
- 
+
+
 void PrintMenu(char *menu ){
-  int offset=0;
-  for (uint8_t row = 0; row<2; row++){
-   for(uint8_t i=0;i<16;i++){
-   lcd.setCursor(i,row);//first 0-15 prints top row. then need skip one space in file to then print the second row
-   offset = row * (17)+i; //the menu has an extra space in between upper & lower row that LCD doesn't have
-   lcd.print(menu+offset) ;
-   //delay(100);
-   }
+ int offset=0;
+ for (uint8_t row = 0; row<2; row++){
+  for(uint8_t i=0;i<16;i++){
+  lcd.setCursor(i,row);//first 0-15 prints top row. then need skip one space in file to then print the second row
+  offset = row * (17)+i; //the menu has an extra space in between upper & lower row that LCD doesn't have
+  lcd.print(menu+offset) ;
+  //delay(100);
   }
+ }
 }
- 
+
+
+
+
+
+
 ///////////////////////////////////// LEFT                    //perhaps LEFT & RIGHT could be just one function but that may be complicated
- 
 int8_t FindLabelLeft(char *menu ){
-lcd.setCursor(12,1);
-lcd.cursor();// make cursor visible 
+//bool foundSpace=false;
+ 
+//assuming 12,1 is where EXIT is displayed
+lcd.setCursor(12,1);//????????????????????????????????????/
+lcd.cursor();// make cursor visible
 int i=startColumn;
 displayCursor(i, row);
 //delay(500);
-if(i==0) {i=15; row = !row;} 
+if(i==0) {i=15; row = !row;}
 else {//lcd.setCursor(5,1);lcd.print(i);
 while(menu[i+(row*17)]!= ' ')
-{ i--; 
- if(i<=0) {i=15; row = !row;}// move to other row far right col =15
- displayCursor(i, row);}
+{ i--;
+if(i<=0) {i=15; row = !row;}// move to other row far right col =15
+displayCursor(i, row);}
 }
 //found space between first lable and label to the left
 digitalWrite(spaceLED, HIGH);
 //delay(1000);
- 
 while(menu[i+(row*17)] == ' ')
- {i--; if(i<=0) {i=15; row = !row;}// move to other row far right col =15
-  displayCursor(i, row);} //skip through blank spaces bewteen labels. 
-  //Now found end of left label
-  digitalWrite(textLED, HIGH);digitalWrite(spaceLED, LOW);
+{i--; if(i<=0) {i=15; row = !row;}// move to other row far right col =15
+ displayCursor(i, row);} //skip through blank spaces bewteen labels.
+ //Now found end of left label
+ digitalWrite(textLED, HIGH);digitalWrite(spaceLED, LOW);
 //delay(1000);
  
 while(menu[i+(row*17)]!= ' ' && i>0)// if label starts at column 0, stop here
 { i--;
-  displayCursor(i, row);
+ displayCursor(i, row);
 }// skip through the left label till find space OR i=0 Label begins at 0 or at i+1
-  //Now found label to the left
-  digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
-if(i<=0) startColumn=0; else startColumn = i+1;   
-  lcd.setCursor(startColumn,row); 
+ //Now found label to the left
+ digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
+if(i<=0) startColumn=0; else startColumn = i+1;  
+ lcd.setCursor(startColumn,row);
 //lcd.print(startColumn); delay(2000);lcd.print((startColumn+(row*17)));
 return (startColumn+(row*17)); // not sure how this will be used - respond to SELECT button
 //when (0,0) this returns 17 which is 16 top row or is it?
-//top row is (0,0)==0 to  (15,0)==15 [added space 16] then 
+//top row is (0,0)==0 to  (15,0)==15 [added space 16] then
 //bottom row (0,1)==17 to (15,1)==32
 }
 
 
 
+
+
 //////////////RIGHT    Difference is increment of index and how handle ends of LCD display
- 
+
 int FindLabelRight(char *menu){ //can left & right be combined?
 //bool row=0;  //test only
 //int startColumn=12; //TEST ONLY
-//usually 12,1 is where EXIT is displayed 
+//usually 12,1 is where EXIT is displayed
 //lcd.setCursor(startColumn,row);
- 
 int i=startColumn;
 displayCursor(i, row);
 lcd.cursor();// make cursor visible
 //delay(500);
-if(i==15) {i=0; row = !row;} 
+if(i==15) {i=0; row = !row;}
 else {//lcd.setCursor(5,1);lcd.print(i);
 while(menu[i+(row*17)]!= ' ' && i<16)
-{ i++;  //lcd.setCursor(0,0);lcd.print(i); 
+{ i++;  //lcd.setCursor(0,1);lcd.print(i);//????
 //displayCursor(i, row);delay(1000);
- if(i>15) {i=0; row = !row; break;}// move to other row far left col =0
- displayCursor(i, row);}
- delay(100);
+if(i>15) {i=0; row = !row; break;}// move to other row far left col =0
+displayCursor(i, row);}
+delay(200);
+ 
+ 
 }
-//found space between first lable and label to the left
+//found space between first lable and label to the right
 digitalWrite(spaceLED, HIGH);
 //delay(500);
-lcd.clear();
-
+//lcd.clear();//????????????????????
+ 
+ 
 while(menu[i+(row*17)] == ' ')
- {i++; if(i>15) {i=0; row = !row;}// move to other row far right col =15
-  displayCursor(i, row);
-  } //skip through blank spaces bewteen labels. 
-  //Now found start of right label
-  digitalWrite(textLED, HIGH);digitalWrite(spaceLED, LOW);
-//delay(1000); 
-  digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
-   //  lcd.print(i);lcd.print(' ');lcd.print(menu[i+(row*17)] );  
-  displayCursor(i, row);
-  //lcd.setCursor(i,row); 
-//lcd.setCursor(4,0);
-//lcd.print(menu[(i+(row*17))]); 
-return (i+(row*17)); // not sure how this will be used - respond to SELECT button
-//probably need to return the position in array not the col position on LCD
-if (i==0 && menu[i+(row*17)] != ' ') {
-  //Now found label to the left
-  digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
-   //  lcd.print(i);lcd.print(' ');lcd.print(menu[i+(row*17)] );  
-  displayCursor(i, row);
-  //lcd.setCursor(i,row); 
+{i++; if(i>15) {i=0; row = !row;}// move to other row far right col =15
+ displayCursor(i, row);
+ 
+  } //skip through blank spaces bewteen labels.
+ 
+ 
+ //Now found start of right label
+digitalWrite(textLED, HIGH);digitalWrite(spaceLED, LOW);
+delay(100);
+digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
+  //  lcd.print(i);lcd.print(' ');lcd.print(menu[i+(row*17)] );//?????
+displayCursor(i, row);
+ //lcd.setCursor(i,row);
 //lcd.setCursor(4,0);
 //lcd.print(menu[(i+(row*17))]);
+
+startColumn =i;//<<<<<<<<<<<<<
 return (i+(row*17)); // not sure how this will be used - respond to SELECT button
 //probably need to return the position in array not the col position on LCD
-} 
+ 
+if (i==0 && menu[i+(row*17)] != ' ') {
+ 
+ //Now found label to the left
+ digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
+    lcd.print(i);lcd.print(' ');lcd.print(menu[i+(row*17)] );
+  displayCursor(i, row);
+ //lcd.setCursor(i,row);
+//lcd.setCursor(4,0);
+//lcd.print(menu[(i+(row*17))]);
+startColumn =i;//<<<<<<<<<<<<<<<
+return (i+(row*17)); // not sure how this will be used - respond to SELECT button
+//probably need to return the position in array not the col position on LCD
+}
 while(menu[i+(row*17)]!= ' ' )// if label starts at column 15, stop here
 { i++;
-  displayCursor(i, row);}// skip through the left label till find space OR i=0 Label begins at 0 or at i+1
-  //Now found label to the left
-  digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
-    // lcd.print(i);lcd.print(' ');lcd.print(menu[i+(row*17)] );  
+ displayCursor(i, row);}// skip through the left label till find space OR i=0 Label begins at 0 or at i+1
+ //Now found label to the left
+ digitalWrite(labelLED, HIGH);digitalWrite(textLED, LOW);
+    lcd.print(i);lcd.print(' ');lcd.print(menu[i+(row*17)] );
   displayCursor(i, row);
-  //lcd.setCursor(i,row);  
+ //lcd.setCursor(i,row);
 //lcd.setCursor(4,0);
-//lcd.print(menu[(i+(row*17))]); 
+//lcd.print(menu[(i+(row*17))]);
+startColumn =i;//<<<<<<<<<<<<<<
 return (i+(row*17)); // not sure how this will be used - respond to SELECT button
 //probably need to return the position in array not the col position on LCD
+ 
 }
 
 
+
+
+
+ 
+///////////////////// ReadMenuLabel
 
 char readMenuLabel(char *menu, int labelStart){
-  //lcd.print(labelStart);delay(1000);
-   //char thisLabel[10]; //is that big enough for any of the labels?
- // if(labelStart==0 ) thisLabel[0]='\0'; //ignore the first label which is at positin 0,0. It's the menu title
- // else{ 
-    for(int i=labelStart;i<34;i++){//menu has 33 characters including 1 non-printing space separating the rows
-     thisLabel[i-labelStart] = menu[i];
-     if( menu[i]==' ') {
-       thisLabel[i-labelStart]='\0'; 
-       break;
-   //  }
-} //lcd.setCursor(0,1);lcd.print(i); 
-
-  }
-  lcd.setCursor(0,0);//lcd.print(":"); /
-  lcd.clear();
-  lcd.print(thisLabel); //printing Main"Y_  (Yen symbol underscore) 
+ //lcd.print(labelStart);delay(1000);
+  //char thisLabel[10]; //is that big enough for any of the labels?
+// if(labelStart==0 ) thisLabel[0]='\0'; //ignore the first label which is at positin 0,0. It's the menu title
+// else{
+   for(int i=labelStart;i<34;i++){//menu has 33 characters including 1 non-printing space separating the rows
+    thisLabel[i-labelStart] = menu[i];
+    if( menu[i]==' ') {
+      thisLabel[i-labelStart]='\0';
+      break;
+  //  }
+}
+ 
+ }
+//lcd.setCursor(0,0);//lcd.print(":"); /
+ //lcd.clear();
+ //lcd.print(thisLabel); //TEST
 return thisLabel;
 }
+ 
 
+
+
+
+////////////////////////handleButtonState
+
+int handleButtonState(){
+ switch (buttonState){
+case unknown: break;
+case left:return FindLabelLeft(menu1Main); break;//returns (i+(row*17));giving 18 should be 16
+case RIGHT: return FindLabelRight(menu1Main); break; // (i+(row*17));
+case select: selectNewMenu(); break; // what to do?
+ 
+default: return 0;
+}
+}
+
+
+
+
+/////////////////////////////Compare char arrays 
 
 int compare(char a[],char b[]){
     for(int i=0;a[i]!='\0';i++){
+      if (i>10) break;//my limit size
         if(a[i]!=b[i])
             return 0;
     }
@@ -189,67 +231,56 @@ int compare(char a[],char b[]){
 }
 
 
-void selectNewMenu(){
-  //thisLabel has the existing menu label as a char array, need method to change menuLabelState
-lcd.print (compare(thisLabel, "Color"));
+/////////////////////select new menu
+ 
+int selectNewMenu(){
 
-if (compare(thisLabel, "Color")){PrintMenu(menu12Color);
-//lcd.print('>');lcd.print(thisLabel);lcd.print('<');
+//lcd.print (compare(thisLabel , "Color"));//returning 0 always
+//lcd.print(thisLabel);
+if(compare(thisLabel , "Color")) PrintMenu(menu2Color);
+
+
+ //??? 
 }
 
-}
+///////////////////// setup
 
-
-int handleButtonState(){
-  switch (buttonState){
-case unknown: break;
-case left:return FindLabelLeft(menu1Main); break;//returns (i+(row*17));giving 18 should be 16
-case RIGHT: return FindLabelRight(menu1Main); break; // (i+(row*17));
-case select: selectNewMenu(); break; // what to do?
-
-default: return 0;
-}
-}
- 
- 
- 
- 
 void setup() {
 pinMode (2, OUTPUT); //digitalWrite(spaceLED, HIGH); // indicators which probably won't be in finished product
 pinMode (3, OUTPUT); //digitalWrite(textLED, HIGH);
 pinMode (4, OUTPUT); //digitalWrite(labelLED, HIGH);
- 
 lcd.begin(16, 2);
- 
 PrintMenu(menu1Main);
- 
 //lcd.setCursor(cursorCol,cursorRow);
- 
 //delay(100);
- 
-//lcd.setCursor(8,1); lcd.print("?"); 
 buttonState = RIGHT; // TEST only. The button State will be set by a function that reads input buttons
- 
-//handleButtonState();
- 
-//char thisLabel[10]; 
 buttonState = left;
-buttonState = RIGHT;
-int labelPosition = handleButtonState();
-//lcd.setCursor(10,1); lcd.print("?");
-//delay(500);
-digitalWrite(3, HIGH);
-//lcd.print(labelPosition);
-readMenuLabel(  menu1Main,labelPosition);
-lcd.setCursor(0,1);
-lcd.print(thisLabel); 
 
+
+
+delay(1000);
+
+//buttonState = RIGHT;
+
+while (analogRead(A0) <1000) {
+if (analogRead(A0) <200) buttonState=left;
+else buttonState=RIGHT;
+//for(int i=0;i<7;i++){
+  digitalWrite(2 , LOW);
+  digitalWrite(3 , LOW);
+  digitalWrite(4 , LOW);
+
+int labelPosition = handleButtonState();
+readMenuLabel(  menu1Main,labelPosition);
+delay(500);
 selectNewMenu();
- 
+delay(500);
+
+ }
 }
- 
+
+
 void loop() {
-  // ...
+ // ...
 }
- 
  
