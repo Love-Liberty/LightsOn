@@ -14,3 +14,5 @@ This update began Nov 11 2022
 The layout and a simulation can be seen at Tinkercad https://www.tinkercad.com/things/aeadTduApG7-introduction. (If you look, you have to slide the switch to the ON position.
 
 In the existing Oct 2022 software the slide switch has been replaced with a photoresistor input that turns the lights on or off depending on the room lighting.
+
+The LCD display & menu can be seen in early stage https://wokwi.com/projects/349613619705545298
