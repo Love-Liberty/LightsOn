@@ -1,5 +1,5 @@
 // LCD1602 to Arduino with function parameters and char arrays.
-////Dec 2 21:31
+////Dec 2 22:14
 // Displaying menus, and moving from one menu item to the next by a single button push
 //The code searches the char array looking for the next menu item, finds it and places the cursor under the first letter
 //This skips menu items of any length and empty spaces.
@@ -162,7 +162,7 @@ void exitToPreviousMenu(){
 
 
 
-///////////////////// Look for next label to LEFT in current menu               Difference: increment index, How handle end of LCD display, order of skip
+///////////////////// Look for next label to LEFT in current menu               Difference: decrement index, How handle end of LCD display, order of skip
 
 int8_t FindLabelLeft(char *menu ){  // Return value is used to set labelPosition. 
 
