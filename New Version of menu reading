@@ -1,0 +1,345 @@
+// LCD1602 to Arduino with function parameters and char arrays.
+////Dec 6 22:08
+// Displaying menus, and moving from one menu item to the next by a single button push
+//The code searches the char array looking for the next menu item, finds it and places the cursor under the first letter
+//This skips menu items of any length and empty spaces.
+//1 press of "left" or "right" button skips to the next menu item
+//Direction is controlled through A0 (for test using pot) "left" or "right" button skips to the next menu item
+//As a test if it finds the "Color" label the menu is changed from the Main menu to the Color menu
+//Dec 1
+// Have state of menu. Function prints the relevant menu based on state.
+//need expand the function that changes state of menu based on label selected
+
+//moving this to VSC/platformIO: 
+//Need #include<Arduino.h>
+//Can't compare char array to string "Color" etc
+//The "Color" etc have to be declared as char arrays.
+//The pins of the LCD are different
+//The values of the input buttons are different
+//Some functions say they return, but don't - warning
+//One has no return value - warning   
+
+#include <LiquidCrystal.h>
+///////////////////// LED indicators which are not needed. They show inner working of search wihtin menus
+#define labelLED 2 
+#define spaceLED 3
+#define textLED 4
+
+enum stateOfbutton_t {unknown, select, left, up, down, RIGHT};// 5 push button inputs read by analogue voltage
+//The values read in the function were set on a simulator & will need to be changed to match the actual buttons/voltages
+
+enum stateOfMenu_t 
+{MenuUnknown, 
+showMain1, 
+show2Color, show2Flicker, show2Day,show2OnOff, // level 2 of hierarchy of menu
+
+show3Color, show3Flicker, show3Day, show3OnOff,            // level 3
+showNoMenu} menuState;
+
+
+LiquidCrystal lcd(12, 11, 10, 9, 8, 7);// This is set on a simulator. May not theyMatch the actual hardware<<<<<
+
+stateOfbutton_t buttonState=unknown;// buttonState is used in other parts of the software
+
+enum pointTo_t {arrowLeft, arrowRight};
+
+//;char instructions[4]
+////menu labels
+char 
+Main = "MAIN",
+Flicker="Flicker", 
+Day="Day", 
+color = "Color", 
+OnOff = "OnOff", 
+EXIT = "EXIT",
+
+OutputMarker = ">OUT<",    
+SelectLED="SelectLED",
+
+Length="Length",
+upDown="up/down",
+ROTATE= "ROTATE",
+
+SpeedDepth ="SpeedDepth", 
+SpeedChance = "SpeedChance";     
+
+
+////////////////////  new stuff
+
+void ShowProjectName(){
+  Serial.print ("ProejctName");
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("     Lights On !");
+}
+
+
+void displayTopRow( char* labelLeft, pointTo_t arrow,  char* labelRight ){
+  lcd.setCursor(0,0);
+  lcd.print(labelLeft); if(arrow == arrowLeft) lcd.print("<-"); else lcd.print("  ");//delete <-
+  lcd.setCursor(9,0); 
+  if(arrow == arrowRight) lcd.print("->"); else lcd.print("  ");
+  lcd.print(labelRight); 
+}
+
+void displayBottomRow(){
+lcd.setCursor(0,1); 
+lcd.print("Select confirms ");
+delay(100);
+lcd.setCursor(0,1); 
+lcd.print("L R to change   ");
+delay(100);
+lcd.setCursor(0,1); 
+lcd.print("Down to next..  ");
+delay(100);
+lcd.setCursor(0,1); 
+lcd.print("Up to go back   ");
+
+}
+
+
+void showMainMenu(){
+displayTopRow( "Main" , arrowRight , "EXIT"  );
+displayBottomRow();
+}
+
+void showColorMenu(){
+displayTopRow( "Color" , arrowRight , "EXIT"  );
+displayBottomRow();  
+}
+
+void showMenu(stateOfMenu_t  menuState, pointTo_t arrowPointer){
+
+switch (menuState){
+
+  case showNoMenu: ShowProjectName(); break;//does this cause problems?
+
+  case MenuUnknown: break;//does this cause problems?
+
+  case showMain1: displayTopRow( "Main" , arrowRight , "EXIT"  ); break;
+
+  case show2Color:displayTopRow( "Color" , arrowRight , "EXIT"  ); break;
+
+  case show2Flicker:displayTopRow("Flicker" , arrowRight , "EXIT"  ); break;
+ 
+  case show2Day: displayTopRow(   "Day" , arrowRight , "EXIT"  ); break;
+  
+  case show2OnOff: displayTopRow( "OnOff" , arrowRight , "EXIT"  ); break;
+
+  case show3Color:displayTopRow( "Colo3   " , arrowRight , "EXIT"  ); break;
+ 
+  case show3Flicker:displayTopRow( "F3" , arrowRight , "EXIT"  ); break;
+
+  case show3OnOff: displayTopRow( "onOff3" , arrowRight , "EXIT"  ); break;
+
+ } 
+}
+
+
+
+
+void moveDownToNextMenuLable(stateOfMenu_t &menuState, pointTo_t &arrowPointer){
+Serial.print(" In moveDownToNextMenuLabel() "); //buttonState= ");
+arrowPointer = arrowRight; //point it at EXIT in new menu
+//pointTo_t {arrowLeft, arrowRight};
+//Serial.print( buttonState);
+Serial.print(" menuState =  ");
+Serial.print(menuState);
+//Serial.print(" arrowPointer = ");
+//Serial.print( arrowPointer);
+
+switch (menuState){
+
+  case showNoMenu:  break;//does this cause problems?
+
+  case MenuUnknown: break;//does this cause problems?
+
+  case showMain1: menuState=show2Color; break;
+
+  case show2Color:menuState=show2Flicker; break;
+
+  case show2Flicker:menuState=show2Day; break;
+
+  case show2Day: menuState=show2OnOff; break;
+
+  case show2OnOff: menuState=showMain1; break;
+ 
+  case show3Flicker: break;
+
+  case show3OnOff:  break;
+
+ } 
+
+
+
+}
+
+void moveUPToPreviousMenuLable(stateOfMenu_t menuState){
+Serial.print(" In moveUPToPreviousMenuLable() ");  
+}
+
+
+/////////////////////////////////////// Respond
+
+void respondToButtons(stateOfMenu_t  &menuState, pointTo_t &arrowPointer, stateOfbutton_t buttonState)
+{
+//need take into acount menu state & button state
+Serial.print(" In Respond  buttonState= ");
+Serial.print( buttonState);
+Serial.print(" menuState =  ");
+Serial.print(menuState);
+Serial.print(" arrowPointer = ");
+Serial.print( arrowPointer);
+
+/////////////// LEFT or RIGHT
+// pointTo_t {arrowLeft, arrowRight};
+if (buttonState == left || buttonState == RIGHT) 
+{// swap direction of arrow
+  if (arrowPointer == arrowLeft) arrowPointer = arrowRight; 
+  else if (arrowPointer == arrowRight) arrowPointer = arrowLeft;
+}
+
+Serial.print(" checked LRUD ArrowPointer==");
+Serial.print(arrowPointer);
+
+
+
+///////////////// UP or DOWN
+if (buttonState == down) moveDownToNextMenuLable(menuState, arrowPointer);
+  else if (buttonState == up) moveUPToPreviousMenuLable(menuState);
+
+else
+
+/////////////////// SELECT
+/*
+stateOfMenu_t 
+{MenuUnknown, 
+showMain1, 
+show2Color, show2Flicker, show2Day,show2OnOff, // level 2 of hierarchy of menu
+
+show3Flicker, show3Day, show3OnOff,            // level 3
+showNoMenu} menuState;
+
+enum pointTo_t {arrowLeft, arrowRight};
+
+*/
+
+if (buttonState == select) {
+//depends on menu and arrow 
+
+Serial.print(" select ");
+switch (menuState){
+
+  case showNoMenu: if(buttonState!= unknown) menuState= MenuUnknown; // any button changes state
+  buttonState =  unknown; break;//does this cause problems?
+
+  case MenuUnknown: if(buttonState) menuState= showMain1; buttonState =  unknown;
+  break; //does this cause problems?
+
+  case showMain1: if(arrowPointer == arrowLeft) {
+    menuState=showNoMenu; 
+    buttonState = unknown; 
+    arrowPointer = arrowRight;}
+                  else if(arrowPointer == arrowRight) {
+    menuState=showNoMenu; 
+    buttonState = unknown;
+    }
+  ShowProjectName();  
+   break;
+//clicking either MAIN or Exit means exit
+
+  case show2Color:if(arrowPointer == arrowLeft) {menuState=show3Color; buttonState = unknown;}
+  else if(arrowPointer == RIGHT) {menuState=showMain1; buttonState = unknown;}  break;
+//Right is always pointing to exit? So go up one level of menu
+
+  case show2Flicker: if(arrowPointer == arrowLeft) {menuState=show3Flicker; buttonState = unknown;}
+  else if(arrowPointer == RIGHT) {menuState=showMain1; buttonState = unknown;}  break;
+//Right is always pointing to exit? So go up one level of menu break;
+ 
+  case show2Day:  break;
+  
+  case show2OnOff:  break;
+ 
+  case show3Flicker: break;
+
+  case show3OnOff:  break;
+
+ } 
+}
+Serial.print(" leaving Rspond  buttonState= ");
+Serial.print( buttonState);
+Serial.print(" menuState = >");
+Serial.print(menuState);
+Serial.print("< arrowPointer = ");
+Serial.println( arrowPointer);
+Serial.println();
+
+
+displayBottomRow();
+
+buttonState = unknown; //try to prevent double response to buttons
+}
+
+
+
+//////////////////////////////// setup
+
+void setup(){
+lcd.begin(16, 2);
+Serial.begin(115200);
+Serial.println("Newer method");
+// pointTo_t {arrowLeft, arrowRight};
+pointTo_t arrowPointer = arrowRight;
+/*
+menuState=showMain1;
+menuState=show2Color;
+menuState=show2Flicker;
+menuState=show2OnOff;
+menuState=show2Day;
+*/
+menuState=showMain1;
+showMenu(menuState, arrowPointer);
+
+/*
+buttonState = left;
+
+respondToButtons(menuState,arrowPointer, buttonState);
+showMenu(menuState, arrowPointer);
+
+buttonState = RIGHT;
+
+respondToButtons(menuState,arrowPointer, buttonState);
+showMenu(menuState, arrowPointer);
+
+//prints on right but doesn't delete print on left
+*/
+
+buttonState = down;
+
+respondToButtons(menuState,arrowPointer, buttonState);
+showMenu(menuState, arrowPointer);
+
+
+buttonState = left;
+respondToButtons(menuState,arrowPointer, buttonState);
+showMenu(menuState, arrowPointer);
+
+
+
+delay(1000);
+
+buttonState = select; //fails to select the menu label Color<- but menu state is 6
+respondToButtons(menuState,arrowPointer, buttonState);
+showMenu(menuState, arrowPointer);
+
+
+
+
+}
+
+
+void loop(){
+
+}
+
+/////////////////////////////////////// end of new stuff
