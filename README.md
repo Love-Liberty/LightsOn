@@ -1,6 +1,8 @@
 # LightsOn
 
-The User-Editing-of-lights-&-manual-override part of the project uses the commands supplied by the User-input-output branch to edit the stored data that determines how the lights are illuminated.
+**The User-Editing-of-lights-&-manual-override** 
+
+part of the project uses the commands supplied by the User-input-output branch to edit the stored data that determines how the lights are illuminated.
 
 The automatic system has data hard coded on how those lights behave. The user IO and the user Editing aims to edit that data to change the way the system then displays the lights.
 
@@ -11,7 +13,7 @@ The editing section is partially complete although not yet uploaded to github
 The current challenge is merging the two user files.
 
 
-Arduino controlled lighting inside model buildings to vary color and brightness to simulate movement inside the rooms.
+**Arduino controlled lighting inside model buildings to vary color and brightness to simulate movement inside the rooms.**
 
 Models of buildings are enhanced if they have interiors with lights. Real buildings have occupants who move around switching some lights on or off and by moving they cause shadows and variations in the light. Also, different types of light have different colors.
 
