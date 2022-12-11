@@ -1,12 +1,14 @@
 # LightsOn
 
-The input output section uses a 2 row 16 column LCD display and input buttons to allow the user to give commands to change the way the main automatic code displays the lights.
+**The input output section**
+
+uses a 2 row 16 column LCD display and input buttons to allow the user to give commands to change the way the main automatic code displays the lights.
 
 The User-Input-output---LCD-1602-+-buttons branch only handles the button pressing and the display of menu items on the LCD. This branch does not carry out any editing of the automatic system.
 
 
 
-Arduino controlled lighting inside model buildings to vary color and brightness to simulate movement inside the rooms.
+**Arduino controlled lighting inside model buildings to vary color and brightness to simulate movement inside the rooms.**
 
 Models of buildings are enhanced if they have interiors with lights. Real buildings have occupants who move around switching some lights on or off and by moving they cause shadows and variations in the light. Also, different types of light have different colors.
 
