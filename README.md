@@ -8,11 +8,17 @@ This project tries to simulate that variation in lighting by using programmable 
 
 The hardware & software have been installed and working in model buildings since 2021.
 
-The next step is to add a control panel & LCD display such that the variables within the software can be altered without having to upload new software.
+The current step is to add a control panel & LCD display such that the variables within the software can be altered without having to upload new software.
 This update began Nov 11 2022
 
 The layout and a simulation can be seen at Tinkercad https://www.tinkercad.com/things/aeadTduApG7-introduction. (If you look, you have to slide the switch to the ON position.
 
-In the existing Oct 2022 software the slide switch has been replaced with a photoresistor input that turns the lights on or off depending on the room lighting.
+In the Oct 2022 software the slide switch had been replaced with a photoresistor input that turns the lights on or off depending on the room lighting. This has been disconected as not very useful.
 
 The LCD display & menu can be seen in early stage https://wokwi.com/projects/349613619705545298 Nov 29 2022
+
+The menu code has been rewritten to avoid complexity. It is functional.
+
+The editing part is partly working. The mjore part was the colorwheel process which is functioning.
+
+Lots more to do. 23:07 11 Dec 2022
