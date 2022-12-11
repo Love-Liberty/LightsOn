@@ -8,7 +8,7 @@ The automatic system has data hard coded on how those lights behave. The user IO
 
 The automatic system was completed months ago and has been installed as hardware. 
 The user IO section is more or less complete, but latest version not yet on github
-The editing section is partially complete although not yet uploaded to github
+The editing section is partially complete and is on github
 
 The current challenge is merging the two user files.
 
