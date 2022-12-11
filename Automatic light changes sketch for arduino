@@ -1,156 +1,290 @@
-#include <Adafruit_NeoPixel.h>
+////////////////////////////  copied from  23rd Nov file  ////////////////////////////////////
+#include "LightsOn_declarations.h"
 
-// Which pin on the Arduino is connected to the NeoPixels?
-// On a Trinket or Gemma we suggest changing this to 1:
-#define LED_PIN    3
-  
-// How many NeoPixels are attached to the Arduino?
-#define LED_COUNT 8
-  
-  
-  // Declare our NeoPixel strip object:
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-// Argument 1 = Number of pixels in NeoPixel strip
-// Argument 2 = Arduino pin number (most are valid)
-// Argument 3 = Pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+ #include <Arduino.h> //20:41 19 Nov 2022 working even though A0 has no input.  (Needed declarations for VSC.)
+ #include <Adafruit_NeoPixel.h>
 
-int pixelNumber=0;
-int colorArray[] = {250, 250, 250};
-bool night=false; //from night/day switch
-bool lightsOn=false;
-int x=0;
 
-int pixelColors[LED_COUNT][3] = {
-//Setting the colors to be used in each pixel
-  {0,  0,  255},
-  {0,  255,  0},
-  {240,  0, 0},
-  {35,  250, 0},
-  {6,  250, 250},
-  {26,  100, 0},
-  {56,  0, 100},
-  {254,  50, 50}
-     };
+// /*
+// #include <LiquidCrystal.h>  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
-void setup() {
-  digitalWrite(11,HIGH);//stanby indicator on
 
-  strip.begin();
-  strip.show(); // Initialize all pixels to 'off'
-  pinMode(2,INPUT);
-  pinMode(11,OUTPUT);//standby power 
-  pinMode(12,OUTPUT);//signal
-  pinMode(13,OUTPUT);//Night or day indicator
-   Serial.begin(9600); // open the serial port at 9600 bps:
-}
+// const int rs = 8, en = 9, d4 = 4, d5 = 5, d6 = 6, d7 = 7;
+// LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+// */
 
-void loop()
+
+
+ #define debug
+ #undef debug  //leave in to prevent printing (go down to set-up and comment out serial.begin). Comment out to allow printing.
+#ifdef debug
+ #define sprint(x) Serial.print(x)
+ #define sprintl(x) Serial.println(x)
+ #else
+ #define sprint(x)
+ #define sprintl(x)
+ #endif
+
+// ////////////////////////////////////////// NeoPixels declarations //////////////////////////////////
+
+// // The pin on the Arduino connected to the Pixels
+ #define LED_PIN 13 //rewire from 8 to allow lcd to use 8
+
+// // Number of Pixels attached to the Arduino
+ #define LED_COUNT 7
+
+// // Declare Pixel strip object:
+ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+// // Argument 1 = Number of pixels in NeoPixel strip
+// // Argument 2 = Arduino pin number (most are valid)
+// // Argument 3 = Pixel type flags, add together as needed:
+// //   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+// //   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+// //   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+// //   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+// //   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+
+// // RGB strips set color from pixel 0, value 0 to 255
+// // for each red, green, blue
+// // int selectedLED is used in sketch to index the LEDs or arrays that store their values
+
+// ////////////////////////////////////////////////////////////// enum types //////////////////////////////////////////////
+
+// enum colors_t
+// {
+//   red,
+//   green,
+//   blue
+// }; // used in arrays as index [0] [1] [2]
+
+// enum buttonState_t
+// {
+//   none,
+//   select,
+//   left,
+//   up,
+//   down,
+//   right,
+//   unknown
+// }; // The keyboard has 5 buttons. Unknown is for use when debouncing. none is wjhen there is no input
+
+// enum stateOfDay_t
+// {
+//   sunrising,
+//   daytime,
+//   sunseting,
+//   night_flicker,
+//   night_OnOff,
+//   idle
+// }; // used to know which functions to call
+
+// enum stateOfSystem_t
+// {
+//   checkingUserAction,
+//   displayingInitialMenu,
+//   readingUserInput,
+//   displayingUserInput,
+//   analysingUserCommands,
+//   editColor,
+//   editFlicker,
+//   editOnOff,
+//   editDay,
+//   exitMenu
+// }; // Provisional nov 22 this is to keep track of what the user is inputting & what the system is doing in response
+
+enum boolArrays_t
 {
+  LED_Off,
+  LED_flicker,
+  LED_switchable
+}; // used as index in an array of booleans to know which LEDs are off/on, whether theuy are 'flickering' (simulated variation) LED_switchable not currently used
 
-  
-night = digitalRead(2);
-  if (night) {
-    digitalWrite(13,HIGH);
-    nightfall();//always do something at night for variation
-   }  else {if (lightsOn){//do nothing if lights already off
-          digitalWrite(13,LOW);dayBreak();}
-          }
-    
-  
-  //RGBW use strip.setPixelColor(n, red, green, blue, white);
-  
-//  strip.show();
-  
-  // set multiple pixels with strip.fill(color, first, count);
-  
-  //turn all off strip.clear();
-  
-  delay(50);
-/*
-  for (pixelNumber=3;pixelNumber=5;pixelNumber+=1);
- {strip.setPixelColor(pixelNumber, colorArray[0],colorArray[1], colorArray[2]);
- }
-*/
-  //nightfall();
-  
-  
+// /////////////////////////////////////////////////////////////// constants ////////////////////////////////////////////////////
+
+ const uint16_t probabilityScale = 1000, switchOn = 900, switchOff = 990, flickerOn = 750, flickerOff = 50; // to be able to set the probability of actions  switchoff/probabilityScale = chance of switching off
+
+// ///////////////////////////////////////////////////////////// variables //////////////////////////////////////////
+
+//colors_t LEDColorToChange, toEqualLEDColor;
+stateOfDay_t stateOfDay;
+// stateOfSystem_t stateOfSystem;
+
+ int lights[LED_COUNT][3]; // store the values of the pixels in each LED  uint8_t lights[LED_COUNT][3]; //<used in other part of project
+
+// // bool anyOff = false;
+// //  bool night=true; //could be from a night/day switch if wanted
+
+ bool LEDBoolArray[LED_COUNT][3]; // These are boolArrays_t{LED_Off,LED_flicker,LED_switchable}; // but switchable not currently used
+
+
+////////////////////////////////////////////// Handling Day States /////////////////
+
+void setLEDToStoredValue(int selectedLED)
+{ // strip.setPixelColor(pixelNumber, colorArray[0],colorArray[1], colorArray[2]);
+
+  strip.setPixelColor(selectedLED, lights[selectedLED][red], lights[selectedLED][green], lights[selectedLED][blue]);
 }
 
-void setPixel()
-{   // strip.setPixelColor(pixelNumber, colorArray[0],colorArray[1], colorArray[2]);
-}
-
-void nightfall()
-{//RGB strips set color from pixel 0, value 0 to 255
-  //for each red, green, blue
-int pNumber;
-for (pNumber = 0;pNumber<LED_COUNT; pNumber++)
-  {  
- Serial.print(pNumber);
-  Serial.print(" ");  Serial.print(pixelColors[pNumber][0]);
-    Serial.print(" ");
-  Serial.print(pixelColors[pNumber][1]);
-  Serial.print(" ");
-  Serial.println(pixelColors[pNumber][2]);
-   digitalWrite(12,HIGH);//signal feedback
-
-//   strip.setPixelColor(pNumber, colorArray[0],colorArray[1], colorArray[2]);
-  if(random(100)>25){
-  strip.setPixelColor(pNumber, pixelColors[pNumber][0],pixelColors[pNumber][1],pixelColors[pNumber][2]);
-
-  }
-     //delay(1000);
-  strip.show();
-  digitalWrite(12,LOW);
-delay(200 * random(5));
 
 
-}
-  lightsOn=true;
-offOn();
-  flicker();
-  
-}
-
-void dayBreak()
-  {    
-int pNumber;
-for (pNumber = 0;pNumber<LED_COUNT; pNumber++)
+void HandleIdle()
 {
-  strip.setPixelColor(pNumber,0,0,0);
-  digitalWrite(12,HIGH);//signal feedback
-  strip.show();
-  digitalWrite(12,LOW);
-  delay(200 * random(5));  
+  sprint("  idle() ");
+}
+
+void handleSunriseTurnOff()
+{
+  sprintl(" sunriseTurnOff() ");
+  bool allOff = true;
+  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+  {
+    allOff = allOff && LEDBoolArray[selectedLED][LED_Off];
+
+    sprint(LEDBoolArray[selectedLED][LED_Off]);
+    sprint(" ");
+    if (!LEDBoolArray[selectedLED][LED_Off]) // if this LED is on
+    {
+
+      if (random(probabilityScale) > 900) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
+      {                                   // switch off at random decide how long it takes
+        strip.setPixelColor(selectedLED, 0, 0, 0);
+        LEDBoolArray[selectedLED][LED_Off] = true; // switch off at random decide how long it takes
+        strip.show();
+      }
+    }
   }
-  lightsOn=false;
+  if (allOff)
+    stateOfDay = daytime;
 }
 
-void offOn(){// thinking about turning light off then on 
-  int randomPixel=random(LED_COUNT-1);
-int randomTime=random(500, 5000);
-  Serial.print("Random pixel= ");
-  Serial.println(randomPixel);
-Serial.print("Random Time= ");
-  Serial.println(randomTime);
-  strip.setPixelColor(randomPixel,0,0,0); 
- digitalWrite(12,HIGH);//signal feedback
- strip.show();
- digitalWrite(12,LOW);//signal feedback
-  delay(randomTime);
+void handleDayTime()
+{
+  sprint("handleDayTime");
+  if (random(probabilityScale) > 900) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
+    stateOfDay = sunseting;           // how long should daylight hours run???
 }
 
-void flicker()
-{int randomPixel=random(LED_COUNT-1);
-  strip.setPixelColor(randomPixel, pixelColors[randomPixel][0]+10,pixelColors[randomPixel] [1]+10,pixelColors[randomPixel][2]+10);
-  digitalWrite(12,HIGH);//signal feedback
- strip.show();
-  digitalWrite(12,LOW);//signal feedback
- delay(10);
+void handleSunsetTurnOn()
+{ ////lights randomly go on
+  sprint(" handleSunset() ");
 
+  if (isAnyOff())
+  {
+
+    for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+    {
+      // sprint(selectedLED);
+      if (random(100) > 25) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
+      {
+        setLEDToStoredValue(selectedLED);
+        LEDBoolArray[selectedLED][LED_Off] = false; // this LED is on
+        strip.show();
+      }
+    } // end for loop
+  }
+  stateOfDay = night_flicker; // all lights are now on
 }
+
+void handleNightFlicker()
+{
+  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+  {
+    if (!LEDBoolArray[selectedLED][LED_Off]) // if this LED is on
+    {
+      decideToFlickerLEDorNot(selectedLED);
+    }
+  }
+  stateOfDay = night_OnOff; // Change so that onOff is called next time (OnOff later gives back control to allow call to flicker)
+}
+
+void handleNightOnOrOff()
+{
+  sprint(" Handling OnOff ");
+  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+  {
+    if (LEDBoolArray[selectedLED][LED_Off]) // if this LED is off
+      decideToSwitchLEDOnOrNot(selectedLED);
+
+    // sprint(LEDBoolArray[selectedLED][LED_switchable]);
+
+    if (random(probabilityScale) > switchOff) ///&& LEDBoolArray[selectedLED][LED_switchable]  why is this always false??? Printing it is always 0
+    {                                         // maybe turn off the LED  probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
+      sprint(" turn LED off ");
+      strip.setPixelColor(selectedLED, 0, 0, 0); // turn off this LED
+      LEDBoolArray[selectedLED][LED_Off] = true; // note that this LED is off
+      strip.show();
+    }
+  }
+  stateOfDay = night_flicker; // Change so that flicker is called next time (Flicker later gives back control to off on)
+}
+
+/////////////////////////////////////////////// Decisions decisions /////////////////
+
+void decideToSwitchLEDOnOrNot(int selectedLED)
+{
+  if (random(probabilityScale) > switchOn) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
+  {
+    LEDBoolArray[selectedLED][LED_Off] = false; // Switch LED back ON  Decide how long led can be off
+    sprint("Switched on LED number ");
+    sprintl(selectedLED);
+    setLEDToStoredValue(selectedLED);
+    strip.show();
+  }
+}
+
+void decideToFlickerLEDorNot(int selectedLED)
+{
+  sprint(" decideToFlicker() ");
+
+  // printSerial(selectedLED);
+
+  if (LEDBoolArray[selectedLED][LED_flicker] == true)
+
+  {                                            // sprint(" already flickering - maybe restore ") ;
+    if (random(probabilityScale) > flickerOff) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
+    {
+      setLEDToStoredValue(selectedLED);
+      sprint(" RESTORE ");
+      LEDBoolArray[selectedLED][LED_flicker] = false;
+    }
+  } // reset led color to normal
+  else
+  {
+    if (random(probabilityScale) > flickerOn)
+    {                                                // sprint(" try to flicker ");
+      LEDBoolArray[selectedLED][LED_flicker] = true; // record that it is going to be flickering
+      strip.setPixelColor(selectedLED, lights[selectedLED][red] - 2, lights[selectedLED][green] - 5, lights[selectedLED][blue] + 4);
+      // printSerial(selectedLED);
+
+      // digitalWrite(12,HIGH);//signal feedback
+      strip.show();
+
+      // digitalWrite(12,LOW);//signal feedback   No delay means not visible
+    }
+  }
+}
+
+bool isAnyOff()
+{
+  int i;
+  sprint(" IsAnyOff()");
+  bool anyOff = false;
+  for (i = 0; i < LED_COUNT; i++)
+  {
+    // sprint("LED ");
+    // sprint(i);
+    // sprint("=");
+    // sprintl(LEDoff[i]);
+
+    if (LEDBoolArray[i][LED_Off])
+      anyOff = true;
+  }
+  return anyOff;
+  // sprint("anyOff=");
+  // sprintl(anyOff);
+}
+
+
+/////////////////////////////////////  the above & function below from Nov 23 file
+
+
