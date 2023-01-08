@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // LCD1602 to Arduino with function parameters and char arrays.
-////Dec 12 23:10
+////Dec 22 23:21
 // Displaying menus, and moving from one menu item to the next by a single button push. DONE
 // change of hue is working. User can select this menu, forced to select an LED then can move around the colorwheel. 
 // Can only go clockwise
@@ -32,248 +32,87 @@
 // The simulator doesn't enforce the rules as closely as the compiler.
 // ISO forbids... problems of comparing chars, literals and arrays. The simulator had allowed it.
 //
+// Trying to alter edit Hue() to match the normal state running where the function only does one action and then let's control go back to the calling place.
+//  Dec 22. Roughed it out on paper but need more thought. Introduced a StateOfUser to known whether navigating or editing.
+//
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include "LightsOn_declarations.h"
 
-///////////////////// NeoPixels
+#include <EEPROM.h>
 
+///////////////////// NeoPixels
 //#include <Adafruit_NeoPixel.h>
 //#define LED_COUNT 7
 //#define LED_PIN 13
-
 // Declare Pixel strip object:
 //Adafruit_NeoPixel  strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 // RGB strips set color from pixel 0, value 0 to 255
 // for each red, green, blue
 // int selectedLED is used in sketch to index the LEDs or arrays that store their values
 
-int selectedLED = -1; //  -1 means not yet selected
+
+///////////////////////////////////////////////////////////// globals //////////////////////////////////////////
 
 int lights[LED_COUNT][3]; // store the values of the pixels in each LED  uint8_t lights[LED_COUNT][3]; //<used in other part of project
 
-/////////////////////////////////////////////////////////////// constants ////////////////////////////////////////////////////
-
-uint16_t probabilityScale = 1000, switchOn = 900, switchOff = 995, flickerOn = 850, flickerOff = 50; // to be able to set the probability of actions  switchoff/probabilityScale = chance of switching off
-
-///////////////////////////////////////////////////////////// variables //////////////////////////////////////////
+// added these storage places 18:49 24 Dec. lights should be uint_8
 
 bool LEDBoolArray[LED_COUNT][3]; // These are boolArrays_t{LED_Off,LED_flicker,LED_switchable}; // but switchable not currently used
 
-pointTo_t arrowPointer = arrowRight; // keep track of which direction the display arrow is pointing. Helps to determine what is called when the 'select' button pressed
+stateOfUser_t userState = inactive;
 
-////////////////////////////////////////////  copied the EDIT file into here as can't get it to compile when they are  separate
+stateOfDay_t stateOfDay = sunrising;
 
-////// global but only used in this file
-bool moveUp = false, // what is moveup used for?? As global only used once & never assgined other value?//<<<<<<<<<<commented out 10 Dec 2022
-    LEDHowChange;
+pointTo_t arrowPointer = arrowLeft; // keep track of which direction the display arrow is pointing. Helps to determine what is called when the 'select' button pressed
 
-colors_t LEDColorToChange, toEqualLEDColor;
-
-//stateOfDay_t stateOfDay;
-//stateOfSystem_t stateOfSystem;
+//bool moveUp = false; // what is moveup used for?? As global only used once & never assgined other value?//<<<<<<<<<<commented out 10 Dec 2022
 
 
+const int numberOfInstructions = 14; // used in a loop to show one instruction at a time
 
-//////////////////////////////////////////////////////  Editing LED color and behaviour
+int selectedLED = -1; //  -1 means not yet selected
 
 
-void determinePlaceOnColorWheel(int colorWheelScore, colors_t &LEDColorToChange, bool &LEDHowChange)
-{
+//these are specific to edit hue ?? could be static local 
+colors_t LEDColorToChange, toEqualLEDColor; // doesn't have to be global
+//bool LEDHowChange; //doesn't have to be global
 
-    sprintl(" determinePlaceOnColorWheel() show color to change [0] [1] [2] and 1 for up 0 for down");
-    // sprint(LED);sprint(" ");sprintl(colorWheelScore);
-    // const int red=0,green=1,blue=2;//replaced by enum type
-    const bool moveUp = true;
-    // NEEDS to also determine the color to equal which is ???
 
-    switch (colorWheelScore)
-    {
-    case 200:
+const int probabilityScale = 512; //used to set how fine the probabilities need to be. Perhaps needs larger integer??
 
-        LEDColorToChange = green;
-        toEqualLEDColor = red;
-        sprintl(LEDColorToChange);
-        LEDHowChange = moveUp;
-        sprintl(LEDHowChange);
 
-        break;
-    case 210:
-        LEDColorToChange = green;
-        toEqualLEDColor = red;
-        sprintl(LEDColorToChange);
-        LEDHowChange = moveUp;
-        sprintl(LEDHowChange);
-        break;
-    case 110:
-        LEDColorToChange = red;
-        toEqualLEDColor = blue;
-        sprintl(LEDColorToChange);
-        LEDHowChange = !moveUp;
-        sprintl(LEDHowChange);
+//////////////////////////////  User editable variables
+uint16_t  switchOn = 8, switchOff = 1, flickerOn = 26, flickerOff = 217, sunrise =1, day =486;
+// to be able to set the probability of actions  switchoff/probabilityScale = chance of switching off
+// these will be user editable variables
 
-        break;
-    case 120:
-        LEDColorToChange = red;
-        toEqualLEDColor = blue;
-        sprintl(LEDColorToChange);
-        LEDHowChange = !moveUp;
-        sprintl(LEDHowChange);
-        break;
-    case 20:
-        LEDColorToChange = blue;
-        toEqualLEDColor = green;
-        sprintl(LEDColorToChange);
-        LEDHowChange = moveUp;
-        sprintl(LEDHowChange);
+uint8_t flick[LED_COUNT][4]; // stores the probability of flicker + R G B values when flickering
 
-        break;
-    case 21:
-        LEDColorToChange = blue;
-        toEqualLEDColor = green;
-        sprintl(LEDColorToChange);
-        LEDHowChange = moveUp;
-        sprintl(LEDHowChange);
-        break;
-    case 11:
-        LEDColorToChange = green;
-        toEqualLEDColor = red;
-        sprintl(LEDColorToChange);
-        LEDHowChange = !moveUp;
-        sprintl(LEDHowChange);
-        break;
-    case 12:
-        LEDColorToChange = green;
-        toEqualLEDColor = red;
-        sprintl(LEDColorToChange);
-        LEDHowChange = !moveUp;
-        sprintl(LEDHowChange);
-        break;
+uint8_t OnOff[LED_COUNT][2]; // stores the probability of switch off, probability of switch on () 0-255 out of 255
 
-    case 2:
-        LEDColorToChange = red;
-        toEqualLEDColor = blue;
-        sprintl(LEDColorToChange);
-        LEDHowChange = moveUp;
-        sprintl(LEDHowChange);
+//uint8_t day; //probability of day occurring (when lights go out) 0-255 out of 255
 
-        break;
-    case 102:
-        LEDColorToChange = red;
-        toEqualLEDColor = blue;
-        sprintl(LEDColorToChange);
-        LEDHowChange = moveUp;
-        sprintl(LEDHowChange);
-        break;
-    case 101:
-        LEDColorToChange = blue;
-        toEqualLEDColor = green;
-        sprintl(LEDColorToChange);
-        LEDHowChange = !moveUp;
-        sprintl(LEDHowChange);
-        break;
-    case 201:
-        LEDColorToChange = blue;
-        toEqualLEDColor = green;
-        sprintl(LEDColorToChange);
-        LEDHowChange = !moveUp;
-        sprintl(LEDHowChange);
-        break;
-    default:
-        sprint(" switch error. determinePlaceOnColorWheel() case not found ");
-        sprintl(colorWheelScore);
 
-        // sprint("Switch result: ");sprintl(LEDColorToChange);sprintl(moveUp);
-    }
-}
+
+
+
+/////////////Printing/////////// These utility  functions are not used. They were for testing.
 
 void printLEDValue(int selectedLED)
 {
-    sprint("LED ");
-    sprint(selectedLED);
-    sprint(" ");
+    // sprint("LED ");
+    // sprint(selectedLED);
+    // sprint(" ");
 
-    sprint(lights[selectedLED][red]);
-    sprint(" ");
-    sprint(lights[selectedLED][green]);
-    sprint(" ");
-    sprintl(lights[selectedLED][blue]);
+    // sprint(lights[selectedLED][red]);
+    // sprint(" ");
+    // sprint(lights[selectedLED][green]);
+    // sprint(" ");
+    // sprintl(lights[selectedLED][blue]);
 }
-
-
-int CalculateOneColorWheelScore(int Lred, int Lgreen, int Lblue)
-{
-    int score[]{0, 0, 0};
-    int colorWheelScore;
-
-    sprint(Lred);
-    sprint(" ");
-    sprint(Lgreen);
-    sprint(" ");
-    sprint(Lblue);
-
-    if (Lred > Lgreen)
-        score[red]++; // but what to do when =?
-    else if (Lred != Lgreen)
-        score[green]++;
-
-    if (Lred > Lblue)
-        score[red]++;
-    else if (Lred != Lblue)
-        score[blue]++;
-
-    if (Lgreen > Lblue)
-        score[green]++;
-    else if (Lgreen != Lblue)
-        score[blue]++;
-
-    sprint(" ");
-    sprint(score[red]);
-    sprint("-");
-    sprint(score[green]);
-    sprint("-");
-    sprint(score[blue]);
-    sprint("=");
-    colorWheelScore = score[red] * 100 + score[green] * 10 + score[blue];
-    /// end of calculating colorWheelScore
-
-    sprint(" LED Unique value=");
-    sprintl(colorWheelScore);
-
-    return colorWheelScore;
-}
-
-/*
-
-int CalculateColorWheelScore(int L){ //this looks at the LED in the array
-  int score[]{0,0,0};
-  int colorWheelScore;
-
-if(lights[L][red]>lights[L][green])score[red]++; //but what to do when =?
-else if(lights[L][red]!=lights[L][green])score[green]++;
-
-if(lights[L][red]>lights[L][2])score[red]++;
-else if(lights[L][red]!=lights[L][blue]) score[blue]++;
-
-if(lights[L][green]>lights[L][blue])score[green]++;
-else if(lights[L][green]!=lights[L][blue])score[blue]++;
-
-    sprint(score[red]);sprint("-");
-    sprint(score[green]);sprint("-");
-    sprint(score[blue]);sprint("=");
-colorWheelScore= score[red]*100 +score[green]*10+score[blue];
-///end of calculating colorWheelScore
-
-sprint(" LED Unique value=");sprintl(colorWheelScore);
-
-  return colorWheelScore;
-}
-*/
-
-/////////////Printing///////////
 
 void LoopLEDsPrintValues()
 {
@@ -312,129 +151,10 @@ void LoopLEDsPrintValues()
     }
 } //////end of printing/////////
 
-///////////////////////////// end of Editing LEDs //////////////////////////////
-/*
-void assignRandomValuesToLEDS()
-{ // is this TEST only? <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    sprintl("Setting LEDs randomly");
-
-    for (uint8_t thisLED = 0; thisLED < LED_COUNT; thisLED++)
-
-    {
-        lights[thisLED][red] = random(256);
-        lights[thisLED][green] = random(256);
-        lights[thisLED][blue] = random(256);
-        // printLEDValue(thisLED);
-
-        determinePlaceOnColorWheel(CalculateOneColorWheelScore(lights[thisLED][red], lights[thisLED][green], lights[thisLED][blue]), LEDColorToChange, moveUp); // moveup? is this ever assigned? Global set as false
-
-        sprint("Global result: ");
-        sprint(LEDColorToChange);
-        sprint(" ");
-        sprintl(moveUp);
-        sprintl("-------");
-        ////////////////////////////////////////////
-
-        strip.setPixelColor(thisLED, lights[thisLED][red], lights[thisLED][green], lights[thisLED][blue]);
-        strip.show();
-    }
-}
-*/
-
-void rotate(int LED, int colorToChange, bool up, int toEqualColor)
-{
-    Serial.print(LED);
-    Serial.print(" Rotate from color ");
-    Serial.print(colorToChange);
-    Serial.print(" up? ");
-    Serial.print(up);
-    Serial.print(" to color ");
-    Serial.println(toEqualColor);
-    Serial.print(" This LED has 3 values: ");
-    Serial.print(lights[LED][0]);
-    Serial.print(" ");
-    Serial.print(lights[LED][1]);
-    Serial.print(" ");
-    Serial.print(lights[LED][2]);
-    Serial.println(" ");
-
-    Serial.print(lights[LED][colorToChange]);
-    Serial.print("->");
-    Serial.println(lights[LED][toEqualColor]);
-
-    // sprint(colorToChange);sprint(" to ");sprint(toEqualColor);
-
-    // int OriginalValueOfSelectedLED[3];   //<<<<<<<<<<<<<<<<<<<<< to be used later to store old settings to be restored if edits not wanted
-
-    //   OriginalValueOfSelectedLED[red]=lights[LED][red];//storing original values
-    //   OriginalValueOfSelectedLED[green]=lights[LED][green];
-    //   OriginalValueOfSelectedLED[blue]=lights[LED][blue];
-
-    /*
-     if(upOrDown && lights[LED][colorToChange]<lights[LED][toEqualColor])
-       while( lights[LED][colorToChange]!=lights[LED][toEqualColor]){
-             lights[LED][colorToChange]++;delay(20);
-
-             Serial.print(lights[LED][colorToChange]);Serial.print(" ");
-    */
-   // sprint(lights[LED][colorToChange] != lights[LED][toEqualColor]);
-
- 
- //           if (thisLED < 0)
-   //             thisLED = LED_COUNT - 1;
-   //     }
-     //           if (thisLED > LED_COUNT - 1)
-      //              thisLED = 0;
-    
-
-    while (lights[LED][colorToChange] != lights[LED][toEqualColor] )  /// need to change from a fast loop to a button mediated change  - use the slect LED
-    {
-
-   lcd.setCursor(0,0);
-   lcd.print(LED);
-   lcd.print(" ");
-   lcd.print(lights[LED][0]);
-   lcd.print(" ");
-   lcd.print(lights[LED][1]);
-   lcd.print(" ");
-   lcd.print(lights[LED][2]);
-   fancyPrint('_');
-
-   readButtonDefineState(); //sets the value of buttonState
-            //                    UP
-    if(buttonState == select) { break;}
-
-    if(buttonState!=unknown){
-            if (buttonState == up){ // go in direction set
-
-            } ;
-            //                    DOWN
-        if (buttonState == down){ //go back a bit ? internal up/down means what is done to move clockwise It isn't the same as buttons
-             //up=!up;
-        } ;
-
-
-        if (up)
-            lights[LED][colorToChange]++;
-        else
-            lights[LED][colorToChange]--;
-
-        // too fast?
-        sprint(lights[LED][colorToChange]);
-        sprint(" ");
-        strip.setPixelColor(LED, lights[LED][0], lights[LED][1], lights[LED][2]);
-        strip.show();
-        // delay(200);
-    }
-    }
-}
-
-//////////////////////////// end of copied EDIT file
-
 
 
 ////////////////////////////////////////////////  LCD output
-
+namespace LCD{
 void fancyPrint(char c)
 {
     for (byte j = 0; j < 32; j++)
@@ -464,7 +184,7 @@ void ShowProjectName()
     fancyPrint('*');
 }
 
-void displayTopRowMenuItems(const char *labelLeft, pointTo_t arrow, const char *labelRight)
+void displayTopRowMenuItems(const char *labelLeft, pointTo_t arrow, const char *labelRight) // is label right always "EXIT" ? No need to pass this or arrow?
 {
     lcd.setCursor(0, 0);
     lcd.clear();
@@ -496,7 +216,7 @@ void DisplayInstructionsBottomRow()
     lcd.setCursor(0, 1);
 
     instructionToPrint++;
-    if (instructionToPrint > 12)
+    if (instructionToPrint > numberOfInstructions)
         instructionToPrint = 0;
 
     switch (instructionToPrint) // these take up a lot of space.
@@ -507,11 +227,11 @@ void DisplayInstructionsBottomRow()
         break;
 
     case 2:
-        lcd.print("Down to next..  ");
+        lcd.print("Scroll menu up ");
         break;
 
     case 3:
-        lcd.print("Up to go back   ");
+        lcd.print("Scroll down    ");
         break;
 
     case 4:
@@ -523,28 +243,39 @@ void DisplayInstructionsBottomRow()
         break;
 
     case 6:
-        lcd.print("Adjust hue      ");
+        lcd.print("Can edit...   ");
         break;
 
     case 7:
-        lcd.print("Adjust saturate ");
+        lcd.print("saturation      ");
         break;
 
     case 8:
-        lcd.print("Adjust intensity ");
+        lcd.print(" or luminance    ");
         break;
 
     case 9:
-        lcd.print("Adjust flicker   ");
-        break;
+         lcd.print("or edit hue   ");    
 
     case 10:
-        lcd.print("Adjust On off    ");
+        lcd.print(" or flicker      ");
         break;
 
     case 11:
-        lcd.print("Adjust day/night ");
+        lcd.print(" or edit On off");
         break;
+
+    case 12:
+        lcd.print(" edit day/night");
+        break;
+
+    case 13:
+        lcd.print("or Select ->Exit ");
+        break;
+
+case 14: 
+lcd.print("Up/Down = change");
+break;
 
     default:
         break;
@@ -554,11 +285,518 @@ void DisplayInstructionsBottomRow()
 }
 
 
+}// end of namespace LCD
 
 
-///\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\  Will need actions in decide What To Display -- to actually edit the LED settings.  Level 3? 4? <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+////////////////////////////////////////////////  EDIT LED setting
 
-void decideWhatToDisplay(stateOfMenu_t menuState, pointTo_t arrowPointer)
+
+namespace EDIT {  //  Editing LED color and behaviour
+
+
+void switchOffTheOtherLightsExcept(int &thisLED){
+        for (int i = 0; i < LED_COUNT; i++)
+        {
+            if (i != thisLED)
+            {
+                strip.setPixelColor(i, 0, 0, 0);
+            }
+            else
+                strip.setPixelColor(thisLED, lights[thisLED][red], lights[thisLED][green], lights[thisLED][blue]);
+        }
+        strip.show();
+}
+
+/// @brief Selecting which LED to edit, switch off all the others
+/// @return number of LED selected or a default
+int switchOffAllLEDS_ExceptOne()
+{
+    int thisLED;
+
+    if (selectedLED < 0)
+        thisLED = LED_COUNT / 2;
+    else
+        thisLED = selectedLED; // start with the already selected LED or the middle LED if not yet selected
+    
+    // menu is selectLED.  the place where the led number should be dispalyed is bwteen the [  ]  on the menu
+    // ("LED[ #?]", arrowPointer, "EXIT") = (4,0) and (5,0)
+    // Serial.print("Switch Off and select LED");
+    // Serial.print(menuState);
+    // Serial.print(" ");
+    // Serial.print(buttonState);
+
+
+    while (menuState == selectLED && buttonState != select)
+    {
+        lcd.setCursor(4, 0); //update the LCD screen with the currently selected LED number bewteen the [  ]  on the menu ("LED[ #?]", arrowPointer, "EXIT") = (4,0) and (5,0)
+        lcd.print(thisLED);
+        switchOffTheOtherLightsExcept(thisLED);
+        IO::readButtonDefineState();
+        LCD::fancyPrint('-'); // this is to slow response down when button is pressed.
+                         //   fancyPrint('-'); // Even a short push of the button would be read more than once if there were no delay
+                         // fancyPrint('%'); // continued pressure does allow repeats
+                         // fancyPrint('.');
+
+        if (buttonState == left || buttonState == right)
+        {  //reverse direction that the arrow points on the LCD display (it indicates which action will be carried out if press "select")
+            if (buttonState == left ) arrowPointer = arrowLeft;
+            else if (buttonState == right) arrowPointer = arrowRight;
+
+             LCD::displayTopRowMenuItems("LED[  ]", arrowPointer, "EXIT");
+             lcd.setCursor(4, 0);
+             lcd.print(thisLED); 
+        }
+
+        //                    DOWN
+        if (buttonState == down)
+        { // down button moves to lower number LED
+            thisLED--;
+            if (thisLED < 0)
+                thisLED = LED_COUNT - 1;
+        }
+        else
+            //                    UP
+            if (buttonState == up)
+            {
+                thisLED++;
+                if (thisLED > LED_COUNT - 1)
+                    thisLED = 0;
+            }
+
+    } // end while. Either abandonded LEDSelect or has pressed select to confirm the choice
+
+    if (buttonState == select && arrowPointer == arrowLeft)
+
+    {
+       // sprint("LED selected ");
+       // sprint(thisLED);
+        return thisLED;
+    }
+    else { //send DataToTheLightsFromtheArrayValues() - need declare above here // because not selected but most of them are now off ??? 
+     //strip.show();  
+     
+        return selectedLED;}  // record which LED has been selected or return the existing value. If it is -1 means none selected (may or may not use this later)
+}
+
+void determinePlaceOnColorWheel(int colorWheelScore, colors_t &LEDColorToChange, bool &LEDHowChange)
+{
+
+    //sprintl(" determine Place On Color Wheel() show color to change [0] [1] [2] and 1 for up 0 for down");
+    // sprint(LED);sprint(" ");sprintl(colorWheelScore);
+    // const int red=0,green=1,blue=2;//replaced by enum type
+    const bool moveUp = true;
+    // NEEDS to also determine the color to equal which is ???
+
+    switch (colorWheelScore)
+    {
+    case 200:
+
+        LEDColorToChange = green;
+        toEqualLEDColor = red;
+       // sprintl(LEDColorToChange);
+        LEDHowChange = moveUp;
+       // sprintl(LEDHowChange);
+
+        break;
+    case 210:
+        LEDColorToChange = green;
+        toEqualLEDColor = red;
+       // sprintl(LEDColorToChange);
+        LEDHowChange = moveUp;
+      //  sprintl(LEDHowChange);
+        break;
+    case 110:
+        LEDColorToChange = red;
+        toEqualLEDColor = blue;
+      //  sprintl(LEDColorToChange);
+        LEDHowChange = !moveUp;
+      //  sprintl(LEDHowChange);
+
+        break;
+    case 120:
+        LEDColorToChange = red;
+        toEqualLEDColor = blue;
+     //   sprintl(LEDColorToChange);
+        LEDHowChange = !moveUp;
+     //   sprintl(LEDHowChange);
+        break;
+    case 20:
+        LEDColorToChange = blue;
+        toEqualLEDColor = green;
+      //  sprintl(LEDColorToChange);
+        LEDHowChange = moveUp;
+     //   sprintl(LEDHowChange);
+
+        break;
+    case 21:
+        LEDColorToChange = blue;
+        toEqualLEDColor = green;
+      //  sprintl(LEDColorToChange);
+        LEDHowChange = moveUp;
+      //  sprintl(LEDHowChange);
+        break;
+    case 11:
+        LEDColorToChange = green;
+        toEqualLEDColor = red;
+       // sprintl(LEDColorToChange);
+        LEDHowChange = !moveUp;
+      //  sprintl(LEDHowChange);
+        break;
+    case 12:
+        LEDColorToChange = green;
+        toEqualLEDColor = red;
+     //   sprintl(LEDColorToChange);
+        LEDHowChange = !moveUp;
+     //   sprintl(LEDHowChange);
+        break;
+
+    case 2:
+        LEDColorToChange = red;
+        toEqualLEDColor = blue;
+     //   sprintl(LEDColorToChange);
+        LEDHowChange = moveUp;
+     //   sprintl(LEDHowChange);
+
+        break;
+    case 102:
+        LEDColorToChange = red;
+        toEqualLEDColor = blue;
+     //   sprintl(LEDColorToChange);
+        LEDHowChange = moveUp;
+     //   sprintl(LEDHowChange);
+        break;
+    case 101:
+        LEDColorToChange = blue;
+        toEqualLEDColor = green;
+     //   sprintl(LEDColorToChange);
+        LEDHowChange = !moveUp;
+     //   sprintl(LEDHowChange);
+        break;
+    case 201:
+        LEDColorToChange = blue;
+        toEqualLEDColor = green;
+     //   sprintl(LEDColorToChange);
+        LEDHowChange = !moveUp;
+     //   sprintl(LEDHowChange);
+        break;
+    default:
+    sprint(" switch error. determine Place On ColorWheel() case not found ");
+     //   sprintl(colorWheelScore);
+
+        // sprint("Switch result: ");sprintl(LEDColorToChange);sprintl(moveUp);
+    }
+}
+
+int CalculateOneColorWheelScore(int Lred, int Lgreen, int Lblue)
+{
+    int score[]{0, 0, 0};
+    int colorWheelScore;
+
+  //  sprint(Lred);
+    // sprint(" ");
+    // sprint(Lgreen);
+    // sprint(" ");
+    // sprint(Lblue);
+
+    if (Lred > Lgreen)
+        score[red]++; // but what to do when =?
+    else if (Lred != Lgreen)
+        score[green]++;
+
+    if (Lred > Lblue)
+        score[red]++;
+    else if (Lred != Lblue)
+        score[blue]++;
+
+    if (Lgreen > Lblue)
+        score[green]++;
+    else if (Lgreen != Lblue)
+        score[blue]++;
+
+    // sprint(" ");
+    // sprint(score[red]);
+    // sprint("-");
+    // sprint(score[green]);
+    // sprint("-");
+    // sprint(score[blue]);
+    // sprint("=");
+    colorWheelScore = score[red] * 100 + score[green] * 10 + score[blue];
+    /// end of calculating colorWheelScore
+
+    // sprint(" LED Unique value=");
+    // sprintl(colorWheelScore);
+
+    return colorWheelScore;
+}
+
+
+void displayLEDValuesOnLCD(){
+        lcd.setCursor(0, 1);
+        lcd.print("Led:"); lcd.print(selectedLED);
+     
+        lcd.setCursor(0, 0);
+        lcd.print(" ");
+        lcd.print(lights[selectedLED][0]);
+        lcd.print(" ");
+        lcd.print(lights[selectedLED][1]);
+        lcd.print(" ");
+        lcd.print(lights[selectedLED][2]);
+}
+
+void displayArrowLeftOnLCD(){
+            lcd.setCursor(9, 0);
+            lcd.print("<- ");
+            lcd.setCursor(12, 0);
+            lcd.print("EXIT");
+}
+
+void displayArrowRightOnLCD(){
+  lcd.setCursor(9, 0);
+  lcd.print(" ->EXIT");
+}
+
+void editHue()
+{
+    int colorWheelScore;
+    colors_t colorToChange = red; //default if functions don't return a value
+    bool LEDHowChange;
+    static bool firstCall =true;
+    static  int redStore, greenStore, blueStore;
+   
+   
+   
+    sprintl();
+    sprint(" editHue ");
+
+    colorWheelScore = CalculateOneColorWheelScore(lights[selectedLED][red], lights[selectedLED][green], lights[selectedLED][blue]);
+    determinePlaceOnColorWheel(colorWheelScore, colorToChange, LEDHowChange);
+   
+    if(firstCall){ // store original values
+
+    redStore = lights[selectedLED][red];
+    greenStore = lights[selectedLED][green];
+    blueStore = lights[selectedLED][blue];
+
+    firstCall=false;
+
+//Serial.print(" firstCall ");
+// Serial.print(" redStore= ");
+// Serial.print(redStore);
+// Serial.print(" lights [red]= ");
+// Serial.println(lights[selectedLED][red]);
+}
+// else {Serial.print(" NOT firstCall ");
+                
+// // Serial.print(" redStore= "); // why is this changing???
+// // Serial.print(redStore);
+// // Serial.print(" lights [red]= ");
+// // Serial.println(lights[selectedLED][red]);
+// }
+    // lcd.clear(); //this is done the first time editHue is called (from respond to nav)
+
+    // sprint(" in hue score");
+    // sprint(colorWheelScore);
+    // sprint(" change color ");
+    // sprint(colorToChange);
+    // sprint(" up1 down0 ");
+    // sprint(LEDHowChange);
+    // sprint(" to equal ");
+    // sprintl(toEqualLEDColor);
+
+// is this if needed???
+    if (lights[selectedLED][colorToChange] != lights[selectedLED][toEqualLEDColor]) /// need to change from a fast loop to a button mediated change  - use the slect LED
+    {
+//        sprint("  in hue conditional ");
+        LCD::fancyPrint('_');
+
+        IO::readButtonDefineState(); // sets the value of buttonState  It is too slow with all those button delays
+
+        displayLEDValuesOnLCD();
+
+        if (arrowPointer == arrowLeft)
+        {
+         displayArrowLeftOnLCD();
+            // lcd.setCursor(9, 0);
+            // lcd.print("<- ");
+            // lcd.setCursor(12, 0);
+            // lcd.print("EXIT");
+        }
+        else if (arrowPointer == arrowRight)
+        {
+            displayArrowRightOnLCD();
+            // lcd.setCursor(9, 0);
+            // lcd.print(" ->EXIT");
+        }
+
+        if (buttonState != unknown)// is this needed?
+        {
+
+            //                              Select
+
+            if (buttonState == select)
+            {
+                // Serial.println(" Select in edit hue() arrow Pointer= ");
+                // Serial.print(arrowPointer);
+                // Serial.print(" redStore= ");
+                // Serial.print(redStore);
+                if (arrowPointer == arrowRight) // reset LED to stored values
+                {                               // could be an array
+                    lights[selectedLED][red] = redStore;
+                    lights[selectedLED][green] = greenStore;
+                    lights[selectedLED][blue] = blueStore;
+
+                    // strip.setPixelColor(selectedLED, lights[selectedLED][red], lights[selectedLED][green], lights[selectedLED][blue]);
+                    // strip.show();
+                    // userState = navigating;
+                    // menuState = show2Color;
+                    //  break; // reset the orginal values of the LED & then leave function. (Could use "reset" button?)
+                }
+                else // use the edited values
+                {
+
+                    // strip.setPixelColor(selectedLED, lights[selectedLED][red], lights[selectedLED][green], lights[selectedLED][blue]);
+                    // strip.show(); // Leave with changes accepted
+                    // userState = navigating;
+                    // menuState = show2Color;
+                }
+//is this redundant? isn't this duplicated at end of function?
+           //         strip.setPixelColor(selectedLED, lights[selectedLED][red], lights[selectedLED][green], lights[selectedLED][blue]);
+            //        strip.show(); // Leave with changes accepted
+
+                    userState = navigating;
+                    menuState = show2Color; // go back to the color menu
+
+            }
+
+            else
+
+                if (buttonState == up) // uses colorwheel decision on how to change which color. User decided UP (clockwise) or DOWN (anticlockwise)
+            { //user clicking UP is saying, yes go clockwise around colorwheel
+                if (LEDHowChange) // this is 1 if color to be increased to go clockwise
+                    lights[selectedLED][colorToChange]++;
+                else
+                    lights[selectedLED][colorToChange]--;
+            }
+            else if (buttonState == down)
+            { //user clicking down is saying go anticlockwise around color wheel (or at least go back a bit)
+                if (LEDHowChange) //this is 0 if color to be decreased to go clockwise
+                    lights[selectedLED][colorToChange]--;
+                else
+                    lights[selectedLED][colorToChange]++;
+            } // if any number has gone out of range, stop them at 0 or 255
+
+            if(lights[selectedLED][colorToChange]<0) lights[selectedLED][colorToChange]=0;
+            else
+            if(lights[selectedLED][colorToChange]>255) lights[selectedLED][colorToChange]=255;
+
+        } // end button != unknown
+    }
+ strip.setPixelColor(selectedLED, lights[selectedLED][0], lights[selectedLED][1], lights[selectedLED][2]);
+ strip.show();
+
+    buttonState = unknown;
+}
+
+
+void editSaturation()
+{
+    Serial.print("edit Saturation");
+}
+
+void editIntensity()
+{
+    Serial.print("edit Intensity");
+}
+
+void editFlicker3()
+{
+    Serial.print("edit Flicker 3");
+}
+
+void editFlicker4()
+{
+    Serial.print("edit Flicker 4");
+}
+
+void editOnOff3()
+{
+    Serial.print("edit OnOff 3");
+}
+
+void editDay3()
+{
+    Serial.print("edit Day 3");
+    static uint8_t dayWas = day;
+
+    // lcd.setCursor(0, 1);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Day:");
+    lcd.print(day);
+    lcd.print(" ");
+
+    if (arrowPointer == arrowLeft)
+    {
+        lcd.setCursor(9, 0);
+        lcd.print("<- EXIT");
+        // lcd.setCursor(12, 0);
+        // lcd.print("EXIT");
+    }
+    else if (arrowPointer == arrowRight)
+    {
+        lcd.setCursor(9, 0);
+        lcd.print(" ->EXIT");
+    }
+
+    if (buttonState != unknown)
+    {
+
+        //                              Select
+
+        if (buttonState == select)
+        {
+            Serial.println(" Select detected in edit day() ");
+            Serial.print(" arrow Pointer=");
+            Serial.println(arrowPointer);
+            if (arrowPointer == arrowRight) // reset LED to stored values
+            {   userState = navigating;                            // could be an array
+                day = dayWas;               // reset to previous value
+                              //   break; // reset the orginal values of the LED & then leave function. (Could use "reset" button?)
+            }
+            else
+            { // use the edited values
+                userState = navigating;
+                menuState = show2Day;
+                Serial.print(" Day length edited ");
+            }
+        }
+
+        else
+
+            if (buttonState == up) // User decided UP to make days longer or DOWN to make them shorter
+                                   // user clicking UP is saying, make day longer
+            day++;
+        else if (buttonState == down) // user is saying make days shorter (less likely)
+            day--;
+
+    } // end button != unknown
+    lcd.setCursor(0, 0);
+    lcd.print("Day:");
+    lcd.print(day);
+    lcd.print(" ");
+    LCD::fancyPrint('D');
+    buttonState = unknown;
+}
+
+}///////////////////////////// end of Editing LEDs //////////////////////////////
+
+
+
+////////////////////////////////////////////////  IO user input & LCD output
+
+
+namespace IO {// Respond to user input
+void displayRelevantMenu(stateOfMenu_t menuState, pointTo_t arrowPointer)
 {
 
     switch (menuState)
@@ -566,73 +804,75 @@ void decideWhatToDisplay(stateOfMenu_t menuState, pointTo_t arrowPointer)
 
     case showNoMenu:
         lcd.clear();
-        ShowProjectName();
+       LCD:: ShowProjectName();
         break; // does this cause problems?
 
     case MenuUnknown: //
 
         break; // does this cause problems?
 
-    case showMain1:
-        displayTopRowMenuItems("Main", arrowPointer, "EXIT");
+    case showMain1:  // the spacing is set in the function, not in these strings
+        LCD::displayTopRowMenuItems("Menu", arrowPointer, "EXIT");
         break;
 
     case show2Color:
-        displayTopRowMenuItems("Color", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("Color", arrowPointer, "EXIT");
         break;
 
     case show2Flicker:
-        displayTopRowMenuItems("Flicker", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("Flicker", arrowPointer, "EXIT");
         break;
 
     case show2Day:
-        displayTopRowMenuItems("Day", arrowPointer, "EXIT");
+       LCD:: displayTopRowMenuItems("Day", arrowPointer, "EXIT");
         break;
 
     case show2OnOff:
-        displayTopRowMenuItems("OnOff", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("OnOff", arrowPointer, "EXIT");
         break;
 
     case selectLED:
-        displayTopRowMenuItems("LED[#?]", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("LED[#?]", arrowPointer, "EXIT");
         break;
 
     case show3Hue:
-        displayTopRowMenuItems("Hue", arrowPointer, "EXIT"); // somewhere here the code has to carry out actions. Probably change to separate functions
+        LCD::displayTopRowMenuItems("Hue", arrowPointer, "EXIT"); // somewhere here the code has to carry out actions. Probably change to separate functions
         break;
 
     case show4Saturate:
-        displayTopRowMenuItems("Saturate", arrowPointer, "EXIT"); // somewhere here the code has to carry out actions. Probably change to separate functions
+        LCD::displayTopRowMenuItems("Saturate", arrowPointer, "EXIT"); // somewhere here the code has to carry out actions. Probably change to separate functions
         break;
 
     case show5Intense:
-        displayTopRowMenuItems("Intense", arrowPointer, "EXIT"); // somewhere here the code has to carry out actions. Probably change to separate functions
+        LCD::displayTopRowMenuItems("Intense", arrowPointer, "EXIT"); // somewhere here the code has to carry out actions. Probably change to separate functions
         break;
 
     case show3Flicker:
-        displayTopRowMenuItems("F3", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("F3", arrowPointer, "EXIT");
         break;
 
     case show4Flicker:
-        displayTopRowMenuItems("F4", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("F4", arrowPointer, "EXIT");
         break;
 
     case show3OnOff:
-        displayTopRowMenuItems("onOff3", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("onOff3", arrowPointer, "EXIT");
         break;
 
     case show3Day:
-        displayTopRowMenuItems("Day3", arrowPointer, "EXIT");
+        LCD::displayTopRowMenuItems("Day3", arrowPointer, "EXIT");
         break;
+
+        
     }
 }
 
 //////////////////////////////////////////////// Change Menu levels
 
-void moveDownToNextMenuLable(stateOfMenu_t &menuState, pointTo_t &arrowPointer)
+void moveDownToNextMenuLabel(stateOfMenu_t &menuState, pointTo_t &arrowPointer) //8
 {
     // Serial.print(" In moveDownToNextMenuLabel() "); //buttonState= ");
-    arrowPointer = arrowRight; // point it at EXIT in new menu
+    arrowPointer = arrowLeft; // point it at EXIT in new menu
     // pointTo_t {arrowLeft, arrowRight};
     ////Serial.print( buttonState);
     // Serial.print(" menuState =  ");
@@ -701,11 +941,11 @@ void moveDownToNextMenuLable(stateOfMenu_t &menuState, pointTo_t &arrowPointer)
     }
 }
 
-void moveUPToPreviousMenuLable(stateOfMenu_t &menuState, pointTo_t &arrowPointer)
+void moveUPToPreviousMenuLabel(stateOfMenu_t &menuState, pointTo_t &arrowPointer) //8
 {
-    // Serial.print(" In moveUPToPreviousMenuLable() ");
+    // Serial.print(" In moveUPToPreviousMenuLabel() ");
 
-    arrowPointer = arrowRight; // point it at EXIT in new menu
+    arrowPointer = arrowLeft; // point it at EXIT in new menu
     // pointTo_t {arrowLeft, arrowRight};
     ////Serial.print( buttonState);
     // Serial.print(" menuState =  ");
@@ -778,419 +1018,277 @@ void moveUPToPreviousMenuLable(stateOfMenu_t &menuState, pointTo_t &arrowPointer
     }
 }
 
+void respondToSelectArrowLeftEdits(stateOfMenu_t &menuState, stateOfMenu_t &returnToMenu){
+switch (menuState)
+{
+            case show3Hue: 
+                              {
+                  if (selectedLED > -1) // need to have selected LED prior to editing it
+                   {buttonState=unknown; //if it was 'select  would skip the while loop
+                   userState = editing;
+                    // sprint(" respondToSelectNav ");
+                    // sprint(" state of menu "); sprint(menuState); sprint(" ");
+                    // sprint(" userState "); sprint(userState); sprint(" ");
+                    //Serial.println();
+                    //Serial.print(userState);
+                   lcd.clear();
+                   EDIT::editHue();  // let this be called in another place after editing has been set??
+                  }  
+                else { returnToMenu = show3Hue; menuState = selectLED; }
+                }
+              
+                break;
+              
+
+            case show4Saturate: 
+                              {
+                   EDIT:: editSaturation();
+                }
+               break;
+              
+            case show5Intense: 
+                {
+                   EDIT:: editIntensity();
+                }         
+                break;
+
+            case show3Flicker:
+
+                { if (selectedLED > -1)
+                  { buttonState=unknown;
+                    EDIT::editFlicker3();} 
+                else {returnToMenu = show3Flicker; menuState = selectLED;}
+                }
+                break;
+
+            case show4Flicker:  // is this needed??
+                {
+                   EDIT:: editFlicker4(); // action                    
+                }
+                break;
+
+            case show3OnOff:
+
+                { if (selectedLED > -1)
+                  { buttonState=unknown;
+                    EDIT::editOnOff3();} 
+                else {returnToMenu = show3OnOff; menuState = selectLED;
+                     }
+                  }
+                break;
+                // Right is always pointing to exit? So go up one level of menu break
 
 
 
+                // Day actions
 
-//////////////////////////////////////////////// Actions to edit LED setting
+            case show3Day:{
+                
+                buttonState=unknown; //if it was 'select  would skip the while loop
+                 userState = editing;
+                 lcd.clear();                                       
+                 EDIT::editDay3();}
+                 break;
 
-void switchOffTheOtherLightsExcept(int &thisLED){
-        for (int i = 0; i < LED_COUNT; i++)
+default:
+    break;
+}
+
+}
+
+void respondToSelectNavArrowRight(stateOfMenu_t &menuState){
+
+ switch (menuState)
         {
-            if (i != thisLED)
-            {
-                strip.setPixelColor(i, 0, 0, 0);
-            }
-            else
-                strip.setPixelColor(thisLED, lights[thisLED][red], lights[thisLED][green], lights[thisLED][blue]);
+
+        case showNoMenu: //=14
+            break; // does this cause problems?
+
+        case MenuUnknown: //=0
+            break; // does this cause problems?
+
+//////////////////////////////////////
+
+        case showMain1: // leave editing, return to auto running. =1
+            menuState = MenuUnknown;
+            userState = inactive;
+            stateOfDay = sunseting;
+            lcd.clear();
+           LCD::ShowProjectName();
+            
+            break;
+
+//////////////////////////////////////
+
+        case show2Color:
+            menuState = showMain1;
+            break;
+
+        case show2Flicker:
+            menuState = showMain1;
+            break;
+
+        case show2Day:
+            menuState = showMain1;
+            break;
+
+        case show2OnOff:
+            menuState = showMain1;
+            break;
+
+        case selectLED:
+            menuState = showMain1;
+            break;
+
+////////////////////////////////////////
+
+        case show3Hue:
+            menuState = show2Color;
+            break;
+
+        case show4Saturate:
+            menuState = show2Color;
+            break;
+
+        case show5Intense:
+            menuState = show2Color;
+            break;
+
+///////////////////////////////////////////
+
+        case show3Flicker:
+            menuState = show2Flicker;
+            break;
+
+        case show4Flicker:
+            menuState = show2Flicker;
+            break;
+
+////////////////////////////////////////////
+
+        case show3OnOff:
+            menuState = show2OnOff;
+            break;
+
+/////////////////////////////////////////////
+
+        case show3Day:
+            menuState = show2Day;
+            break;
+
+        default:
+            break;
         }
-        strip.show();
+
 }
 
-int switchOffAllLEDS_ExceptOne()
-{
-    int thisLED;
-
-    if (selectedLED < 0)
-        thisLED = LED_COUNT / 2;
-    else
-        thisLED = selectedLED; // start with the already selected LED or the middle LED if not yet selected
-    
-    // menu is selectLED.  the place where the led number should be dispalyed is bwteen the [  ]  on the menu
-    // ("LED[#?]", arrowPointer, "EXIT") = (4,0) and (5,0)
-    // Serial.print("Switch Off and select LED");
-    // Serial.print(menuState);
-    // Serial.print(" ");
-    // Serial.print(buttonState);
-
-
-    while (menuState == selectLED && buttonState != select)
-    {
-        lcd.setCursor(4, 0); //update the LCD screen with the currently selected LED number bewteen the [  ]  on the menu ("LED[#?]", arrowPointer, "EXIT") = (4,0) and (5,0)
-        lcd.print(thisLED);
-        switchOffTheOtherLightsExcept(thisLED);
-        readButtonDefineState();
-        fancyPrint('-'); // this is to slow response down when button is pressed.
-                         //   fancyPrint('-'); // Even a short push of the button would be read more than once if there were no delay
-                         // fancyPrint('%'); // continued pressure does allow repeats
-                         // fancyPrint('.');
-
-        if (buttonState == left || buttonState == right)
-        {  //reverse direction that the arrow points on the LCD display (it indicates which action will be carried out if press "select")
-            if (arrowPointer == arrowLeft) arrowPointer = arrowRight;
-            else if (arrowPointer == arrowRight) arrowPointer = arrowLeft;
-
-            displayTopRowMenuItems("LED[  ]", arrowPointer, "EXIT");
-            lcd.setCursor(4, 0);
-            lcd.print(thisLED); 
-        }
-
-        //                    DOWN
-        if (buttonState == down)
-        { // down button moves to lower number LED
-            thisLED--;
-            if (thisLED < 0)
-                thisLED = LED_COUNT - 1;
-        }
-        else
-            //                    UP
-            if (buttonState == up)
-            {
-                thisLED++;
-                if (thisLED > LED_COUNT - 1)
-                    thisLED = 0;
-            }
-
-    } // end while. Either abandonded LEDSelect or has pressed select to confirm the choice
-
-    if (buttonState == select && arrowPointer == arrowLeft)
-
-    {
-        Serial.print("LED selected ");
-        Serial.print(thisLED);
-        return thisLED;
-    }
-    else { //sendDataToTheLightsFromtheArrayValues() - need declare above here // because not selected but most of them are now off ??? 
-     //strip.show();  
-     
-        return selectedLED;}  // record which LED has been selected or return the existing value. If it is -1 means none selected (may or may not use this later)
-}
-
-void adjustHue()
-{   int colorWheelScore;
-    Serial.print("Adjust Hue");
-    
-    while(buttonState!=select){
-    colorWheelScore = CalculateOneColorWheelScore(lights[selectedLED][red],lights[selectedLED][green],lights[selectedLED][blue]);
-    colors_t colorToChange=red;
-    bool LEDHowChange;
-    determinePlaceOnColorWheel(colorWheelScore, colorToChange, LEDHowChange);
-
-  Serial.print(" buttonState ");
-        Serial.print(buttonState);
-  Serial.print(" arrow ");
-        Serial.print(arrowPointer);
-    Serial.print(" Selected ");
-        Serial.print(selectedLED);
-    Serial.print(" Change Color: ");
-            Serial.print(colorToChange);
-    Serial.print(" (Up1/down0)=");
-            Serial.print(LEDHowChange);
-    Serial.print(" To Equal Color: ");
-            Serial.println(toEqualLEDColor);
-
-
-    rotate( selectedLED, colorToChange, LEDHowChange, toEqualLEDColor);      // need this to be done in steps with button clicks. Currently 20:44 11 Dec 2022 it is a fast loop  
-    }
-}
-
-void adjustSaturation()
-{
-    Serial.print("Adjust Saturation");
-}
-
-void adjustIntensity()
-{
-    Serial.print("Adjust Intensity");
-}
-
-void adjustFlicker3()
-{
-    Serial.print("Adjust Flicker 3");
-}
-
-void adjustFlicker4()
-{
-    Serial.print("Adjust Flicker 4");
-}
-
-void adjustOnOff3()
-{
-    Serial.print("Adjust OnOff 3");
-}
-
-void adjustDay3()
-{
-    Serial.print("Adjust Day 3");
-}
-
-
-
-
-
-///////////////////////////////////////////////// Respond to user input
-
-void respondToButtonState(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState)
-{
-
-    // working: button state  down 3,  up 4,  left 2, right 5 / left  select on color & flicker
-    //  not working button state select on exit . left select on others
-
-    // need take into acount menu state & button state
-    // Serial.print(" In Respond  buttonState= ");
-    // Serial.print( buttonState);
-    // Serial.print(" menuState =  ");
-    // Serial.print(menuState);
-    // Serial.print(" arrowPointer = ");
-    // Serial.print( arrowPointer);
-
-    //                  LEFT or RIGHT
-    // pointTo_t {arrowLeft, arrowRight};
-    if (buttonState == left || buttonState == right)
-    { // swap direction of arrow
-        if (arrowPointer == arrowLeft)
-            arrowPointer = arrowRight;
-        else if (arrowPointer == arrowRight)
-            arrowPointer = arrowLeft;
-    }
-
-    // Serial.print(" checked LRUD ArrowPointer==");
-    // Serial.print(arrowPointer);
-
-    //                    UP or DOWN
-    if (buttonState == down)
-        moveDownToNextMenuLable(menuState, arrowPointer);
-    else if (buttonState == up)
-        moveUPToPreviousMenuLable(menuState, arrowPointer);
-
-    else
-
-        //                      SELECT
-
-        if (buttonState == select)
-        {
-            // depends on menu and arrow
-            // Serial.print(" select ");
-            switch (menuState)
+void respondToSelectNavArrowLeft(stateOfMenu_t &menuState){
+ static stateOfMenu_t returnToMenu = MenuUnknown;
+     switch (menuState)
             {
 
             case showNoMenu:
                 if (buttonState != unknown)
-                    menuState = MenuUnknown; // any button changes state
-                // buttonState = unknown;
+                    menuState = MenuUnknown; // any button changes state                
                 break; // does this cause problems?
 
             case MenuUnknown:
                 if (buttonState)
-                    menuState = showMain1;
-                // buttonState = unknown;
+                    menuState = showMain1;                
                 break; // does this cause problems?
 
-            case showMain1: // clicking either MAIN or Exit means exit
-                if (arrowPointer == arrowLeft)
+                ///////////////////////////////////////////////////////////////////
+
+            case showMain1: 
                 {
-                    menuState = showNoMenu;
-                    stateOfDay = sunseting; //Leave the Input output code & return to lights on auto - 23:01 12 Dec 2022 works but need on EXIT too
-                    // buttonState = unknown;  ///<<<-------------------------------------------------------------------------- this is set by all the same???
-                    arrowPointer = arrowRight;
-                }    // these two are the same - don't need to code for left & right
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = showNoMenu;
-                    stateOfDay = sunseting; //Leave the Input output code & return to lights on auto - 23:01 12 Dec 2022 works but need on EXIT too                     
-                    // buttonState = unknown;
-                }
-                ShowProjectName();
+                    menuState = show2Color;
+                }    
                 break;
 
             case show2Color:
-                if (arrowPointer == arrowLeft)
-                {
+                                {
                     menuState = show3Hue;
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = showMain1;
-                    // buttonState = unknown;
                 }
                 break;
-                // Right is always pointing to exit? So go up one level of menu
-
+                
             case show2Flicker:
-                if (arrowPointer == arrowLeft)
-                {
+                               {
                     menuState = show3Flicker;
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = showMain1;
-                    // buttonState = unknown;
                 }
                 break;
                 // Right is always pointing to exit? So go up one level of menu break;
 
             case show2Day:
-                if (arrowPointer == arrowLeft)
-                {
+                                {
                     menuState = show3Day;
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = showMain1;
-                    // buttonState = unknown;
                 }
                 break;
                 // Right is always pointing to exit? So go up one level of menu break;
 
             case show2OnOff:
-                if (arrowPointer == arrowLeft)
                 {
                     menuState = show3OnOff;
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = showMain1;
-                    // buttonState = unknown;
                 }
                 break;
-                // Right is always pointing to exit? So go up one level of menu break;
 
-                // Actions when selected
+
+
+//////////////////////////////////////////////////
+
 
             case selectLED:
-                if (arrowPointer == arrowLeft)
                 {
                     buttonState = unknown;                      // needs this
-                    selectedLED = switchOffAllLEDS_ExceptOne(); // function to select an LED to be altered
+                    selectedLED = EDIT::switchOffAllLEDS_ExceptOne(); // function to select an LED to be altered
                     if (selectedLED > -1)
-                        menuState = showMain1;
-                    Serial.print(" selectedLED ");
-                    Serial.print(selectedLED); // if not selected stay on the same menu, but if selected the user has to choose what to change
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = showMain1;
-                    // buttonState = unknown;
+                        menuState = returnToMenu; // display the menu that called selectLED
+                    //Serial.print(" selectedLED ");
+                   // Serial.print(selectedLED); // if not selected stay on the same menu, but if selected the user has to choose what to change
                 }
                 break;
-                // Right is always pointing to exit? So go up one level of menu break;
 
-                // Color actions
+                case show3Hue: 
+                case show4Saturate: 
+                case show5Intense: 
+                 case show3Flicker:
+                case show4Flicker:
+                case show3OnOff:
+                case show3Day:
 
-            case show3Hue: // hue
-                if (arrowPointer == arrowLeft)
-                {arrowPointer = arrowRight; //point it back at EXIT
-                     if (selectedLED > -1) // need to have selected LED prior to adjusting it
-                   {buttonState=unknown; //it was 'select and would skip the while loop
-                    adjustHue();} //  Next level 'saturate' 
-                    else menuState = selectLED;
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show2Color;
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
+                    respondToSelectArrowLeftEdits(menuState, returnToMenu);       
+                    break;      
 
-            case show4Saturate: // hue
-                if (arrowPointer == arrowLeft)
-                {
-                    adjustSaturation(); //  Next level 'saturate'
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show2Color;
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
-
-            case show5Intense: // hue
-                if (arrowPointer == arrowLeft)
-                {
-                    adjustIntensity(); //  Next level 'saturate'
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show2Color;
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
-
-                // Flicker Actions
-
-            case show3Flicker:
-                if (arrowPointer == arrowLeft)
-                {
-                    adjustFlicker3(); // next
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show2Flicker; // previous
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
-
-            case show4Flicker:
-                if (arrowPointer == arrowLeft)
-                {
-                    adjustFlicker4(); // action
-                    // buttonState = unknown;
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show3Flicker; // previous
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
-
-                // On Off actions
-
-            case show3OnOff:
-                if (arrowPointer == arrowLeft)
-                {
-                    adjustOnOff3();
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show2OnOff;
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
-
-                // Day actions
-
-            case show3Day:
-                if (arrowPointer == arrowLeft)
-                {
-                    adjustDay3();
-                }
-                else if (arrowPointer == arrowRight)
-                {
-                    menuState = show2Day;
-                    // buttonState = unknown;
-                }
-                break;
-                // Right is always pointing to exit? So go up one level of menu break;
-
+            
+// sprint(" respond To Select Nav arror left ");
+// sprint(" state of menu "); sprint(menuState); sprint(" ");
+// sprint(" userState "); sprint(userState); sprint(" ");
+//Serial.println();
+//Serial.print(userState);
+                
             default:
                 break;
-            }
-        }
-    // Serial.print(" leaving Rspond  buttonState= ");
+    }
+
+
+}
+
+/// @brief When user navigating & clicked 'select'
+/// @param menuState 
+/// @param arrowPointer 
+/// @param buttonState 
+void respondToSelectNavigating(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState)  ///dec 18 14:47 //6
+{ // select when the arrow points right means exiting to previous menu.
+//select when the arrow points left may mean edit some of the behaviour of the lights
+
+    if (arrowPointer == arrowRight)
+     {respondToSelectNavArrowRight(menuState);} 
+     else 
+     if (arrowPointer == arrowLeft)
+      { respondToSelectNavArrowLeft(menuState);}
+
+buttonState = unknown;      // try to prevent double response to buttons
+
+     // Serial.print(" leaving Rspond  buttonState= ");
     // Serial.print( buttonState);
     // Serial.print(" menuState = >");
     // Serial.print(menuState);
@@ -1198,10 +1296,67 @@ void respondToButtonState(stateOfMenu_t &menuState, pointTo_t &arrowPointer, sta
     // Serial.println( arrowPointer);
     // Serial.println();
 
-    buttonState = unknown; // try to prevent double response to buttons
 }
 
-void readButtonDefineState()
+void handleButtonStateIfLeftRight(){
+if (buttonState == left)
+            arrowPointer = arrowLeft;
+    else if (buttonState == right)
+            arrowPointer = arrowRight;
+}
+
+void handleButtonStateIfNavUpDownSelect(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState){
+   if (buttonState == down)
+                moveDownToNextMenuLabel(menuState, arrowPointer);
+            else if (buttonState == up)
+                moveUPToPreviousMenuLabel(menuState, arrowPointer);
+
+            else
+                //                     SELECT
+                if (buttonState == select)
+                    respondToSelectNavigating(menuState, arrowPointer, buttonState);
+}
+
+void handleButtonStateIfEdit(stateOfMenu_t menuState, pointTo_t arrowPointer,stateOfbutton_t buttonState)
+{ // do we need arrow & button???
+ if (menuState == show3Hue)
+                EDIT::editHue();
+            else if (menuState == show3Day)
+            EDIT::editDay3();
+}
+
+/// @brief Change arrow direction left/right, respond to up/down, respond to select
+/// @param menuState 
+/// @param arrowPointer 
+/// @param buttonState 
+void respondToButtonState(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState) //5
+{
+// sprint(" respondToButtonState ");
+// sprint(" state of day "); sprint(stateOfDay); sprint(" ");
+// sprint(" userState "); sprint(userState); sprint(" ");
+// sprint(" menuState "); sprint(menuState); sprint(" ");
+// sprint(" buttonState "); sprint(buttonState); sprintl(" ");
+    // working: button state  down 3,  up 4,  left 2, right 5 / left  select on color & flicker
+
+    //                  LEFT or RIGHT                   // pointTo_t {arrowLeft, arrowRight};
+handleButtonStateIfLeftRight();
+
+    //                                 UP or DOWN 
+    //- this depends on whether navigating menu or taking an action (stateOfUser_t userState  inactive, navigating, editing)
+    // if userState == navigating respond one way, and different if userState == editing
+
+    if (userState == navigating)
+    {   handleButtonStateIfNavUpDownSelect(menuState, arrowPointer,buttonState);
+    }
+
+    else if (userState == editing)
+    {
+        handleButtonStateIfEdit(menuState, arrowPointer,buttonState);
+           
+    }
+}
+
+void readButtonDefineState() //4
 { // if any button, set lights to 'idle' or stay out of system loop?
     // only comes here if a button is pressed
     //  Need to delay response to long clicks as it gets called many times
@@ -1256,9 +1411,294 @@ void readButtonDefineState()
     } //
 }
 
+/// @brief If a button pressed, read it to define it, respond to it, decide which menu, show it + instructions
+void CheckIfUserClickingButtons()  //2
+{
+    // check If Any Button Pressed();  At setup "menu uknown" "buttons unknown" "arrow point right"  // If came out of menu "show no menu" "buttons unknown" "arrow point right"
+    if (analogRead(A0) < 1000)
+    {
+        stateOfDay = idle;       // tell other systems to do nothing because user is active
+        if(userState == inactive) userState = navigating;
+
+//sprint(" checkIfUserClicking ");
+//sprint(" state of day "); sprint(stateOfDay); sprint(" ");
+//sprint(" userState "); sprint(userState); sprint(" ");
+
+        readButtonDefineState(); // First time will display a menu & ignore the button. On rentry it takes 2 clicks to get back in.
+
+if(userState == navigating){ // delay response, but allow fast resonse if user editing
+         LCD::fancyPrint('%'); // this is to slow response down when button is pressed.
+         LCD::fancyPrint(' '); // Even a short push of the button would be read more than once if there were no delay
+         LCD::fancyPrint('%'); // continued pressure does allow repeats
+         LCD::fancyPrint('.');
+}
+        respondToButtonState(menuState, arrowPointer, buttonState);
+
+if (userState == navigating) {
+displayRelevantMenu(menuState, arrowPointer);
+        if (menuState != showNoMenu)
+           LCD::DisplayInstructionsBottomRow();
+}
+    }
+}
+
+} ///////////////////////////////////////  end of namespace IO () User input output)
 
 
-//////////////////////////////////////////////////////// initial values assigned to the lights from setup() ///////////////
+
+
+////////////////////////////////////////////////  AUTO - how the lights change when no user interaction
+
+
+namespace AUTO {////////// AUTO handling of lights  (below is from nov 23 with new errors, mostly fixed dec 12 )
+
+void outputStateOfDayToLCD(const char *message){ // it prints too many times if not slowed down
+    
+    if(random(100)<25){
+    lcd.setCursor(0,1);
+    lcd.print(message);
+    }
+}
+
+void HandleIdle()
+{ //outputStateOfDayToLCD();
+
+  sprint("i");
+}
+
+void handleSunriseTurnOff()
+{outputStateOfDayToLCD("Sunrise ");
+  sprintl(" sunriseTurnOff() ");
+  bool allOff = true;
+  
+  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+  {
+    allOff = allOff && LEDBoolArray[selectedLED][LED_Off];
+
+    Serial.print(LEDBoolArray[selectedLED][LED_Off]);
+    Serial.print(" ");
+    if (!LEDBoolArray[selectedLED][LED_Off]) // if this LED is on
+    {
+
+      if (random(probabilityScale) < 5) // uint8_t probabilityScale = 256, switchOn = 230, switchOff = 254, flickerOn = 217, flickerOff = 13;   ???
+      {                                   // switch off at random decide how long it takes
+        strip.setPixelColor(selectedLED, 0, 0, 0);
+        LEDBoolArray[selectedLED][LED_Off] = true; // switch off at random decide how long it takes
+        strip.show();
+      }
+    }
+  } //Serial.println(" allOff="); Serial.print(allOff);Serial.print(" "); Serial.print(allOff);
+  
+  Serial.println();
+  if (allOff)
+   stateOfDay = daytime;
+}
+
+void handleDayTime()
+{outputStateOfDayToLCD("Day            ");
+  Serial.print(" handleDayTime ");
+  if (random(probabilityScale) > day) //uint8_t probabilityScale = 256, switchOn = 230, switchOff = 254, flickerOn = 217, flickerOff = 13;   ???
+    stateOfDay = sunseting;           // how long should daylight hours run???
+}
+
+void handleSunsetTurnOn()
+{ ////lights randomly go on
+
+
+// Serial.print(" stateOfDay=");Serial.print(stateOfDay);
+outputStateOfDayToLCD("Sunset  ");
+  sprint(" handleSunset() ");
+
+  if (isAnyLightOff())
+  {
+
+    for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+    {
+
+if (LEDBoolArray[selectedLED][LED_Off]) { // this led is off
+
+         Serial.print(LEDBoolArray[selectedLED][LED_Off]);
+         Serial.print(" ");
+      
+      if (random(probabilityScale) < 5) //uint8_t probabilityScale = 256, switchOn = 230, switchOff = 254, flickerOn = 217, flickerOff = 13;   ???
+      {
+       SETUP::setLEDToStoredValue(selectedLED);
+        LEDBoolArray[selectedLED][LED_Off] = false; // this LED is on
+        strip.show();
+
+      }
+     }
+     } Serial.println();// end for loop
+  } 
+else  stateOfDay = night_flicker; // is Any Off () = no
+
+}
+
+void handleNightFlicker()
+{
+    // Serial.print(" stateOfDay=");Serial.print(stateOfDay);
+    outputStateOfDayToLCD("Night Flick     ");
+  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+  {
+    if (!LEDBoolArray[selectedLED][LED_Off]) // if this LED is on
+    {
+      decideToFlickerLEDorNot(selectedLED);
+    }
+  }
+  stateOfDay = night_OnOff; // Change so that onOff is called next time (OnOff later gives back control to allow call to flicker)
+ //decideIfSunrise();/// need chance of sunrise
+
+}
+
+void handleNightOnOrOff()
+{ //Serial.print(" stateOfDay=");Serial.print(stateOfDay);
+    outputStateOfDayToLCD   ("Night      onOff");
+  sprint(" Handling OnOff ");
+  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
+  {
+    if (LEDBoolArray[selectedLED][LED_Off]) // if this LED is off
+      decideToSwitchLEDOnOrNot(selectedLED);
+
+    // sprint(LEDBoolArray[selectedLED][LED_switchable]);
+
+    if (random(probabilityScale) < switchOff) ///&& LEDBoolArray[selectedLED][LED_switchable]  why is this always false??? Printing it is always 0
+    {                                         // maybe turn off the LED uint8_t probabilityScale = 256, switchOn = 230, switchOff = 254, flickerOn = 217, flickerOff = 13;   ???
+    //   sprint(" turn LED off ");
+      strip.setPixelColor(selectedLED, 0, 0, 0); // turn off this LED
+      LEDBoolArray[selectedLED][LED_Off] = true; // note that this LED is off
+      strip.show();
+    }
+  }
+  stateOfDay = night_flicker; // Change so that flicker is called next time (Flicker later gives back control to off on)
+   decideIfSunrise();/// need chance of sunrise
+}
+
+/////////////////////////////////////////////// Auto Decisions decisions /////////////////
+
+void decideToSwitchLEDOnOrNot(int selectedLED)
+{
+  if (random(probabilityScale) < switchOn) //uint8_t probabilityScale = 256, switchOn = 230, switchOff = 254, flickerOn = 217, flickerOff = 13;   ???
+  {
+    LEDBoolArray[selectedLED][LED_Off] = false; // Switch LED back ON  Decide how long led can be off
+    sprint("Switched on LED number ");
+    sprintl(selectedLED);
+    SETUP::setLEDToStoredValue(selectedLED);
+    strip.show();
+  }
+}
+
+void decideToFlickerLEDorNot(int selectedLED)
+{
+  //sprint(" decideToFlicker() ");
+
+  // printSerial(selectedLED);
+
+  if (LEDBoolArray[selectedLED][LED_flicker] == true)
+
+  {                                            // sprint(" already flickering - maybe restore ") ;
+    if (random(probabilityScale) < flickerOff) //uint8_t probabilityScale = 256, switchOn = 230, switchOff = 254, flickerOn = 217, flickerOff = 13;   ???
+    {
+      SETUP::setLEDToStoredValue(selectedLED);
+     // sprint(" RESTORE ");
+      LEDBoolArray[selectedLED][LED_flicker] = false;
+    }
+  } // reset led color to normal
+  else
+  {
+    if (random(probabilityScale) < flickerOn)
+    {                                                // sprint(" try to flicker ");
+      LEDBoolArray[selectedLED][LED_flicker] = true; // record that it is going to be flickering
+      strip.setPixelColor(selectedLED, lights[selectedLED][red] - 2, lights[selectedLED][green] - 5, lights[selectedLED][blue] + 4);
+      // printSerial(selectedLED);
+
+      // digitalWrite(12,HIGH);//signal feedback
+      strip.show();
+
+      // digitalWrite(12,LOW);//signal feedback   No delay means not visible
+    }
+  }
+}
+
+void decideIfSunrise(){
+   
+    if (random(probabilityScale)<sunrise) stateOfDay = sunrising;
+
+}
+
+bool isAnyLightOff()
+{
+  int i;
+  sprint("isAnyLightOff()");
+  bool anyOff = false;
+  for (i = 0; i < LED_COUNT; i++)
+  {
+    // sprint("LED ");
+    // sprint(i);
+    // sprint("=");
+    // sprintl(LEDoff[i]);
+
+    if (LEDBoolArray[i][LED_Off])
+      anyOff = true;
+  }
+  return anyOff;
+  // sprint("anyOff=");
+  // sprintl(anyOff);
+}
+
+
+
+
+
+/// @brief If not idle call the relevant auto-running function
+void CheckStateOfDay()
+{
+    switch (stateOfDay)
+    {
+
+    case idle:
+      //  Serial.print(" idling  ");
+         HandleIdle();
+        break;
+
+    case sunrising:
+     // Serial.print(" sunrising ");
+        handleSunriseTurnOff();
+        break;
+
+    case daytime:
+     //   Serial.print(" daytime ");
+        handleDayTime();
+        break; // not action during daytime when lights are all off
+
+    case sunseting:
+      //  Serial.print(" sunseting ");
+        handleSunsetTurnOn();
+        break;
+
+    case night_flicker:
+    //    Serial.print(" night_flicker ");
+        handleNightFlicker();
+        break;
+
+    case night_OnOff:
+     // Serial.print(" night_OnOff ");
+        handleNightOnOrOff();
+        break;
+
+    default:
+        Serial.print(stateOfDay);
+    }
+}
+
+
+}// end of namespace AUTO //////////////////// above is AUTO handling of lights
+
+
+
+//////////////////////////////////////////////// SETUP reading from EEPROM or setting the colors and behaviours of the lights
+
+namespace SETUP{ // initial values assigned to the lights from setup()  and calls from auto-running
+
 
 void setAllAsWarmWhite()
 {
@@ -1300,16 +1740,109 @@ void sendDataToTheLightsFromtheArrayValues()
     } // end for loop
 }
 
-//////////////////////////////// setup
+
+void eepromTest(){
+
+//  EEPROM.update(0,0);
+// EEPROM.update(21,21);
+// EEPROM.update(49,49);
+
+
+
+
+    sprint("eeprom test length of memory:");
+    sprint(EEPROM.length()); // 1024
+    sprintl(" The following reads 3 bytes LED_COUNT number of times.");
+const uint8_t LightsToStart= 0;
+//loadFromEEPROM(3, lights);
+//loadFromEEPROM(4);
+//read enough bytes to fill lights[LED_COUNT][3]
+//this is currently overwritten by the functions that set the LED values
+sprint(" lights[] starts at");
+sprintl(LightsToStart);
+for(uint8_t i=0;i<LED_COUNT; i++){
+    for(uint8_t col=0;col<3;col++)
+    { lights[i][col]= EEPROM.read(i*3+col);
+      sprint(" ");
+      sprint(lights[i][col]); // default value stored is 255
+    }
+}
+const uint8_t flickToStart = LightsToStart + LED_COUNT * 3;
+//read enough bytes to fill flicker[LED_COUNT][4] array
+//this is currently not used by any functions
+sprintl();
+sprint(" flick[][3] starts at ");
+sprintl(flickToStart);
+//flick starts where lights ends
+for(uint8_t i=0;i<LED_COUNT; i++){
+    for(uint8_t col=0;col<4;col++)
+    { flick[i][col]= EEPROM.read(flickToStart + (i*4+col));
+      sprint(" ");
+      sprint(flick[i][col]); // default value stored is 255
+    }
+}
+const uint8_t onOffToStart = flickToStart + LED_COUNT * 4;
+//read enough bytes to fill onOff[LED_COUNT][2]
+//this is currently overwritten by the functions that set the LED values
+sprintl();
+sprint(" onOff[][2] starts at ");
+sprintl(onOffToStart);
+for(uint8_t i=0;i<LED_COUNT; i++){
+    for(uint8_t col=0;col<2;col++)
+    { OnOff[i][col]= EEPROM.read( onOffToStart +(i*2+col));
+      sprint(" ");
+      sprint(OnOff[i][col]); // default value stored is 255
+    }
+    
+}
+
+const uint8_t dayToStart = onOffToStart + LED_COUNT * 2;
+
+//EEPROM.update(dayToStart,dayToStart);
+day = EEPROM.read(dayToStart);
+sprintl();
+sprint(" day starts at ");
+sprintl(dayToStart);
+sprint(day);
+
+    //   Serial.print(" ");
+    //  Serial.print(EEPROM.read(0)); // default value 255 BUT oddly it reads the value that is about to be written (This read seems
+    // to happen after the write that is listed below)
+    //delay (500);
+    //  uint8_t t = 17;
+
+    //    EEPROM.write(0,t); // 
+    //    Serial.print(" ");
+    //  Serial.print(EEPROM.read(0)); // default value 255
+sprintl();
+}
+
+
+
+
+
+
+} /// end of SETUP namespace
+/////////////////////////////////  end of setup
+
 
 void setup()
-{
+{ 
+    
+    
+    stateOfDay = sunrising;
 
     Serial.begin(9600);
-    Serial.println("Dec 12 2022 @ 22:36.  Combined IO part Edit part & auto part.");
+ //   sprintl("Dec 12 2022 @ 22:36.  Combined IO part, Edit part, & auto part.");
+  //  sprintl("Dec 25 @ 19:21.  Navigation is now a state & editHue() almost works.");
+ //   sprintl("Begun testing write/read of EEPROM. lights[][], flick[][], onOff[][] & day");
+
+//eepromTest(); // how to load data from eeprom.
+
+
 
     lcd.begin(16, 2);
-    ShowProjectName();
+    LCD::ShowProjectName();
     // delay(1000);
 
     //////////below from EDIT file
@@ -1317,19 +1850,15 @@ void setup()
     strip.show(); // Initialize all pixels to 'off'
 
     ////////////////////   set the stored values for the lights & then send that data to the physical lights to illuminate them
-    setAllAsWarmWhite();                     // put values in the array that represents the programmable LEDS
-    setAsFluorescent();                      // sets some values a bit bluer
-    sendDataToTheLightsFromtheArrayValues(); // write that data to the strip of lights
+    SETUP::setAllAsWarmWhite();                     // put values in the array that represents the programmable LEDS
+    SETUP::setAsFluorescent();                      // sets some values a bit bluer
+    SETUP::sendDataToTheLightsFromtheArrayValues(); // write that data to the strip of lights
     strip.show();                            // Tell the lights to illuminate
-
-    // write instruction? "Any button for menu"
 
     // Start the LCD screen for user IO
     lcd.setCursor(0, 1);
-    lcd.print("Any button: menu");
+    lcd.print("Any button: menu"); // should be in namespace LCD
 
-    // arbitrary start condition to see if it changes when button pressed. (Works)
-    stateOfDay = sunrising;
 
     //////////////////////////////////////////
     // assignRandomValuesToLEDS(); // Only a test.
@@ -1339,257 +1868,12 @@ void setup()
     // rotate( 2,LEDColorToChange,LEDHowChange,toEqualLEDColor);
     // rotate( 3,LEDColorToChange,LEDHowChange,toEqualLEDColor);
 }
-
-void CheckIfUserClickingButtons()
-{
-    // check If Any Button Pressed();  At setup "menu uknown" "buttons unknown" "arrow point right"  // If came out of menu "show no menu" "buttons unknown" "arrow point right"
-    if (analogRead(A0) < 1000)
-    {
-        stateOfDay = idle;       // tell other systems to do nothing because user is active
-        readButtonDefineState(); // First time will display a menu & ignore the button. On rentry it takes 2 clicks to get back in.
-
-        fancyPrint('%'); // this is to slow response down when button is pressed.
-        fancyPrint(' '); // Even a short push of the button would be read more than once if there were no delay
-        fancyPrint('%'); // continued pressure does allow repeats
-        fancyPrint('.');
-
-        respondToButtonState(menuState, arrowPointer, buttonState);
-
-        decideWhatToDisplay(menuState, arrowPointer);
-        if (menuState != showNoMenu)
-            DisplayInstructionsBottomRow();
-    }
-}
-
-
-
-////////// AUTO   from nov 23 with new errors
-
-
-
-bool isAnyOff();
-void decideToFlickerLEDorNot(int);
-void decideToSwitchLEDOnOrNot(int); 
-
-
-void HandleIdle()
-{
-  sprint("  idle() ");
-}
-
-void handleSunriseTurnOff()
-{
-  sprintl(" sunriseTurnOff() ");
-  bool allOff = true;
-  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
-  {
-    allOff = allOff && LEDBoolArray[selectedLED][LED_Off];
-
-    sprint(LEDBoolArray[selectedLED][LED_Off]);
-    sprint(" ");
-    if (!LEDBoolArray[selectedLED][LED_Off]) // if this LED is on
-    {
-
-      if (random(probabilityScale) > 900) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
-      {                                   // switch off at random decide how long it takes
-        strip.setPixelColor(selectedLED, 0, 0, 0);
-        LEDBoolArray[selectedLED][LED_Off] = true; // switch off at random decide how long it takes
-        strip.show();
-      }
-    }
-  }
-  if (allOff)
-    stateOfDay = daytime;
-}
-
-void handleDayTime()
-{
-  sprint("handleDayTime");
-  if (random(probabilityScale) > 900) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
-    stateOfDay = sunseting;           // how long should daylight hours run???
-}
-
-void handleSunsetTurnOn()
-{ ////lights randomly go on
-  sprint(" handleSunset() ");
-
-  if (isAnyOff())
-  {
-
-    for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
-    {
-      // sprint(selectedLED);
-      if (random(100) > 25) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
-      {
-        setLEDToStoredValue(selectedLED);
-        LEDBoolArray[selectedLED][LED_Off] = false; // this LED is on
-        strip.show();
-      }
-    } // end for loop
-  }
-  stateOfDay = night_flicker; // all lights are now on
-}
-
-void handleNightFlicker()
-{
-  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
-  {
-    if (!LEDBoolArray[selectedLED][LED_Off]) // if this LED is on
-    {
-      decideToFlickerLEDorNot(selectedLED);
-    }
-  }
-  stateOfDay = night_OnOff; // Change so that onOff is called next time (OnOff later gives back control to allow call to flicker)
-}
-
-void handleNightOnOrOff()
-{
-  sprint(" Handling OnOff ");
-  for (int selectedLED = 0; selectedLED < LED_COUNT; selectedLED++)
-  {
-    if (LEDBoolArray[selectedLED][LED_Off]) // if this LED is off
-      decideToSwitchLEDOnOrNot(selectedLED);
-
-    // sprint(LEDBoolArray[selectedLED][LED_switchable]);
-
-    if (random(probabilityScale) > switchOff) ///&& LEDBoolArray[selectedLED][LED_switchable]  why is this always false??? Printing it is always 0
-    {                                         // maybe turn off the LED  probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
-      sprint(" turn LED off ");
-      strip.setPixelColor(selectedLED, 0, 0, 0); // turn off this LED
-      LEDBoolArray[selectedLED][LED_Off] = true; // note that this LED is off
-      strip.show();
-    }
-  }
-  stateOfDay = night_flicker; // Change so that flicker is called next time (Flicker later gives back control to off on)
-}
-
-/////////////////////////////////////////////// Decisions decisions /////////////////
-
-void decideToSwitchLEDOnOrNot(int selectedLED)
-{
-  if (random(probabilityScale) > switchOn) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
-  {
-    LEDBoolArray[selectedLED][LED_Off] = false; // Switch LED back ON  Decide how long led can be off
-    sprint("Switched on LED number ");
-    sprintl(selectedLED);
-    setLEDToStoredValue(selectedLED);
-    strip.show();
-  }
-}
-
-void decideToFlickerLEDorNot(int selectedLED)
-{
-  sprint(" decideToFlicker() ");
-
-  // printSerial(selectedLED);
-
-  if (LEDBoolArray[selectedLED][LED_flicker] == true)
-
-  {                                            // sprint(" already flickering - maybe restore ") ;
-    if (random(probabilityScale) > flickerOff) // probabilityScale = 1000, switchOn = 990, switchOff = 990, flickerOn = 750, flickerOff = 50   ???
-    {
-      setLEDToStoredValue(selectedLED);
-      sprint(" RESTORE ");
-      LEDBoolArray[selectedLED][LED_flicker] = false;
-    }
-  } // reset led color to normal
-  else
-  {
-    if (random(probabilityScale) > flickerOn)
-    {                                                // sprint(" try to flicker ");
-      LEDBoolArray[selectedLED][LED_flicker] = true; // record that it is going to be flickering
-      strip.setPixelColor(selectedLED, lights[selectedLED][red] - 2, lights[selectedLED][green] - 5, lights[selectedLED][blue] + 4);
-      // printSerial(selectedLED);
-
-      // digitalWrite(12,HIGH);//signal feedback
-      strip.show();
-
-      // digitalWrite(12,LOW);//signal feedback   No delay means not visible
-    }
-  }
-}
-
-bool isAnyOff()
-{
-  int i;
-  sprint(" IsAnyOff()");
-  bool anyOff = false;
-  for (i = 0; i < LED_COUNT; i++)
-  {
-    // sprint("LED ");
-    // sprint(i);
-    // sprint("=");
-    // sprintl(LEDoff[i]);
-
-    if (LEDBoolArray[i][LED_Off])
-      anyOff = true;
-  }
-  return anyOff;
-  // sprint("anyOff=");
-  // sprintl(anyOff);
-}
-
-
-void CheckStateOfDay()
-{
-    switch (stateOfDay)
-    {
-
-    case idle:
-        Serial.print(" idling  ");
-         HandleIdle();
-        break;
-
-    case sunrising:
-      Serial.print(" sunrising ");
-        handleSunriseTurnOff();
-        break;
-
-    case daytime:
-        Serial.print(" daytime ");
-        handleDayTime();
-        break; // not action during daytime when lights are all off
-
-    case sunseting:
-        Serial.print(" sunseting ");
-        handleSunsetTurnOn();
-        break;
-
-    case night_flicker:
-        Serial.print(" night_flicker ");
-        handleNightFlicker();
-        break;
-
-    case night_OnOff:
-        Serial.print(" night_OnOff ");
-        handleNightOnOrOff();
-        break;
-
-    default:
-        Serial.print(stateOfDay);
-    }
-}
-
-
-/////////////////////////////////////  the above & function below from Nov 23 file
-
-
-
-
-
-
-////////////////////// above is AUTO
-
-
-
-
 //////////////////////////////////////////////// Loop
-
+/// @brief Checks for user input; checks state of day for auto running
 void loop()
-{ //
-
-    CheckIfUserClickingButtons();
-    CheckStateOfDay(); // copied from other file
+{ 
+IO::CheckIfUserClickingButtons();  //1
+AUTO::CheckStateOfDay(); // copied from other file   //2
 }
 
-/////////////////////////////////////// end of interface code
+/////////////////////////////////////// end of code
