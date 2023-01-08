@@ -1,0 +1,200 @@
+
+#pragma once
+
+#include <Arduino.h>
+#include <LiquidCrystal.h>
+#include <Adafruit_NeoPixel.h>
+
+#define LED_COUNT 7
+#define LED_PIN 13
+
+// Declare Pixel strip object:
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+// RGB strips set color from pixel 0, value 0 to 255
+// for each red, green, blue
+// int selectedLED is used in sketch to index the LEDs or arrays that store their values
+
+#define debug
+#undef debug // leave in to prevent printing (go down to set-up and comment out serial.begin). Comment out to allow printing.
+#ifdef debug
+#define sprint(x) Serial.print(x)
+#define sprintl(x) Serial.println(x)
+#else
+#define sprint(x)
+#define sprintl(x)
+#endif
+
+enum colors_t
+{
+  red,
+  green,
+  blue
+}; // used in arrays as index [0] [1] [2]
+
+/////////////////////  State of day for LED activity
+
+enum stateOfDay_t
+{
+  idle,          // 0
+  sunrising,     // 1
+  daytime,       // 2
+  sunseting,     // 3
+  night_flicker, // 4
+  night_OnOff,   // 5
+
+}; // used to know which functions to call
+
+// stateOfDay_t stateOfDay;
+
+enum boolArrays_t
+{
+  LED_Off,
+  LED_flicker,
+  LED_switchable
+}; // used as index in an array of booleans to know which LEDs are off/on, whether theuy are 'flickering' (simulated variation) LED_switchable not currently used
+
+///////////////////// LED which are not needed. They could be used as indicators
+
+// Indicators that have two roles either to show color change when user editing or display function when lights under auto control
+// #define LEDred_sunrise      A1
+// #define LEDgreen_daytime    A2
+// #define LEDblue_sunset      A3
+// #define LEDincrease_night-F A4
+// #define LEDdecrease_night_O A5
+
+// #define LED A6
+
+// #define LED 2
+// #define LED 3
+
+// #define LED 11
+// #define LED 12
+
+/////////////////////////// LCD 1602 display for user input/output
+
+// LiquidCrystal lcd(12, 11, 10, 9, 8, 7);// This is set on a simulator. May not theyMatch the actual hardware<<<<<
+const int rs = 8, en = 9, d4 = 4, d5 = 5, d6 = 6, d7 = 7; // the read/write pin not connected
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+////////////////////////////////////////////////  enums and global variables
+
+enum stateOfbutton_t // 5 push button inputs read by analogue voltage
+{
+  unknown,
+  select,
+  left,
+  up,
+  down,
+  right
+};
+// The values read in the function will need to be changed to match the actual buttons/voltages if using a different set
+stateOfbutton_t buttonState; // buttonState is used to record which button was pressed
+
+enum stateOfMenu_t
+{
+  MenuUnknown, // initial state
+
+  showMain1,
+
+  show2Color,
+  show2Flicker,
+  show2Day,
+  show2OnOff, // level 2 of hierarchy of menu
+
+  show3Hue,
+  show4Saturate,
+  show5Intense, // show6Color,
+  show3Flicker,
+  show4Flicker,
+  show3Day,
+  show3OnOff, // level 3
+
+  // show4Rotate,
+
+  selectLED,
+  showNoMenu
+};
+
+stateOfMenu_t menuState; //= MenuUnknown; // menuState records which menu is to be displayed or is being displayed
+// (when bottom level of the menu reached the program needs to change to handle the actions required)
+
+enum stateOfUser_t
+{
+  inactive,
+  navigating,
+  editing
+};
+
+// stateOfUser_t userState;
+
+enum pointTo_t // used to point to menu items on the lcd display
+{
+  arrowLeft,
+  arrowRight
+};
+
+namespace SETUP
+{
+  void setAllAsWarmWhite();
+  void setAsFluorescent();
+  void setLEDToStoredValue(int);
+  void sendDataToTheLightsFromtheArrayValues();
+  void eepromTest();
+}
+
+namespace EDIT
+{
+  int switchOffAllLEDS_ExceptOne();
+  void switchOffTheOtherLightsExcept(int &thisLED);
+  void determinePlaceOnColorWheel(int colorWheelScore, colors_t &LEDColorToChange, bool &LEDHowChange);
+  int CalculateOneColorWheelScore(int Lred, int Lgreen, int Lblue);
+  void displayLEDValuesOnLCD();
+  void displayArrowLeftOnLCD();
+  void displayLEDValuesOnLCD();
+  void displayArrowLeftOnLCD();
+  void displayArrowRightOnLCD();
+  
+  void editHue();
+  void editSaturation();
+  void editIntensity();
+  void editFlicker3();
+  void editFlicker4();
+  void editOnOff3();
+  void editDay3();
+}
+
+namespace IO
+{
+  void displayRelevantMenu(stateOfMenu_t menuState, pointTo_t arrowPointer);
+  void moveDownToNextMenuLabel(stateOfMenu_t &menuState, pointTo_t &arrowPointer);
+  void moveUPToPreviousMenuLabel(stateOfMenu_t &menuState, pointTo_t &arrowPointer);
+  void respondToSelectArrowLeftEdits(stateOfMenu_t &menuState, stateOfMenu_t &returnToMenu);
+  void respondToSelectNavArrowRight(stateOfMenu_t &menuState);
+  void respondToSelectNavArrowLeft(stateOfMenu_t &menuState);
+  void respondToSelectNavigating(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState);
+  void handleButtonStateIfLeftRight();
+  void handleButtonStateIfNavUpDownSelect(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState);
+  void handleButtonStateIfEdit(stateOfMenu_t menuState, pointTo_t arrowPointer,stateOfbutton_t buttonState);
+  void respondToButtonState(stateOfMenu_t &menuState, pointTo_t &arrowPointer, stateOfbutton_t &buttonState);
+  void readButtonDefineState();
+  void CheckIfUserClickingButtons();
+}
+
+namespace AUTO
+{
+  void outputStateOfDayToLCD(const char *message);
+  void HandleIdle();
+  void handleSunriseTurnOff();
+  void handleDayTime();
+  void handleSunsetTurnOn();
+  void handleNightFlicker();
+  void handleNightOnOrOff();
+  void decideToSwitchLEDOnOrNot(int);
+  void decideToFlickerLEDorNot(int);
+  void decideIfSunrise();
+  bool isAnyLightOff();
+}
+
+// void readButtonDefineState(); // declared here as called before function definition
+void fancyPrint(char);
+// void displayTopRowMenuItems(const char*, pointTo_t, const char);
